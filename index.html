@@ -1,0 +1,729 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Аптечка</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="theme-color" content="#1d4f91">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* VOICE: calm, clinical, kind — a tool used twice a day, nothing loud
+   IDEA: a pharmacy prescription label + blister pack — ruled lines, pill cells
+   PICTURE: today's schedule itself: big hanging times, one tap per dose, exact tablets to take
+   COLOUR and TYPE: paper white, deep pharmacy blue, coral only for "пора заказать"; Onest
+   LAYOUT: one column, tabs as a label strip, cards stack on phones */
+:root{color-scheme:light dark;
+--bg:light-dark(#f4f3ef,#111417);--panel:light-dark(#fff,#1a1f24);--ink:light-dark(#14202b,#e9edf1);
+--mute:light-dark(#5d6a75,#9aa6b1);--line:light-dark(#dcdad3,#2c343c);--blue:light-dark(#1d4f91,#7fb0f0);
+--blue-soft:light-dark(#e3ecf8,#1d2c40);--coral:light-dark(#c8432a,#ff8a70);--coral-soft:light-dark(#fbe7e2,#3a2320);
+--ok:light-dark(#2f6f57,#7cd1ad)}
+:root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 Onest,system-ui,sans-serif;overflow-x:clip}
+.wrap{max-width:840px;margin:0 auto;padding:clamp(20px,4vw,48px) max(4vw,14px) 64px}
+header{display:flex;flex-wrap:wrap;align-items:end;justify-content:space-between;gap:12px 24px;margin-bottom:18px}
+h1{font-size:clamp(32px,6vw,44px);line-height:1.05;margin:0;font-weight:700;letter-spacing:-.01em}
+.sum{color:var(--mute);margin:6px 0 0}.sum b{color:var(--ink)}
+button{font:inherit;cursor:pointer;border:0;border-radius:10px;min-height:44px;padding:0 16px}
+button:focus-visible,input:focus-visible,a:focus-visible,select:focus-visible{outline:3px solid var(--blue);outline-offset:2px}
+.pri{background:var(--blue);color:var(--panel);font-weight:600}
+.ghost{background:transparent;color:var(--blue);border:1.5px solid var(--line)}
+.ghost:hover{border-color:var(--blue)}
+.warn{background:var(--coral);color:#fff;font-weight:600}
+nav{display:flex;gap:4px;border-bottom:2px solid var(--ink);margin-bottom:22px;overflow-x:auto}
+nav a{flex:none;padding:10px 14px;color:var(--mute);text-decoration:none;font-weight:600;border-radius:8px 8px 0 0;min-height:44px;display:flex;align-items:center;gap:8px}
+nav a[aria-current]{background:var(--ink);color:var(--bg)}
+.badge{background:var(--coral);color:#fff;border-radius:99px;font-size:13px;padding:0 7px;line-height:20px}
+.note{font-size:14px;color:var(--mute);margin:0 0 14px}.note.alert{color:var(--coral)}
+.banner{background:var(--blue-soft);border-radius:14px;padding:16px 18px;margin-bottom:18px;display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between}
+.banner p{margin:0}
+.sched{list-style:none;margin:0;padding:0;background:var(--panel);border:1px solid var(--line);border-radius:14px}
+.sched li{display:grid;grid-template-columns:5.2em minmax(0,1fr) auto;gap:14px;align-items:center;padding:14px 18px;border-top:1px solid var(--line)}
+.sched li:first-child{border-top:0}
+.time{font-size:28px;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap;line-height:1}
+.late .time{color:var(--coral)}
+.done .time,.done .nm,.done .pill{color:var(--mute)}
+.nm{font-weight:600;font-size:17px}
+.sub{font-size:14px;color:var(--mute)}
+.pill{font-weight:600;color:var(--blue)}
+.pill.bad{color:var(--coral)}
+.take{background:var(--blue-soft);color:var(--blue);font-weight:600;white-space:nowrap}
+.took{background:transparent;color:var(--ok);font-weight:600;white-space:nowrap;padding:0 10px}
+.took:hover{text-decoration:underline}
+h2{font-size:20px;margin:30px 0 10px}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,250px),1fr));gap:12px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:10px}
+.card.low{border-color:var(--coral);box-shadow:inset 0 0 0 1px var(--coral)}
+.card.fin{opacity:.6}
+.card h3{margin:0;font-size:18px;line-height:1.25}
+.big{font-size:28px;font-weight:700;line-height:1;font-variant-numeric:tabular-nums}
+.big small{font-size:15px;font-weight:500;color:var(--mute)}
+.packs{margin:0;padding:0;list-style:none;font-size:14px}
+.packs li{display:flex;justify-content:space-between;gap:8px;border-top:1px dashed var(--line);padding:4px 0}
+.packs li span:last-child{font-variant-numeric:tabular-nums;white-space:nowrap}
+.blister{display:flex;flex-wrap:wrap;gap:4px}
+.blister i{width:11px;height:11px;border-radius:50%;background:var(--blue);display:block}
+.blister i.e{background:transparent;border:1.5px solid var(--line)}
+.low .blister i:not(.e){background:var(--coral)}
+.row{display:flex;flex-wrap:wrap;gap:8px;margin-top:auto}.row button{flex:1 1 auto}
+.order{list-style:none;padding:0;margin:0 0 16px;background:var(--panel);border:1px solid var(--line);border-radius:14px}
+.order li{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;justify-content:space-between;padding:14px 18px;border-top:1px solid var(--line)}
+.order li:first-child{border-top:0}
+.days{color:var(--coral);font-weight:600}
+.empty{background:var(--panel);border:1.5px dashed var(--line);border-radius:14px;padding:28px;text-align:center;color:var(--mute)}
+.empty p{margin:0 0 14px}
+.log{list-style:none;padding:0;margin:0}
+.log li{display:flex;gap:14px;padding:8px 0;border-bottom:1px solid var(--line);font-size:15px}
+.log time{color:var(--mute);font-variant-numeric:tabular-nums;white-space:nowrap;width:3.2em;flex:none}
+.log .r{color:var(--ok)}
+dialog{border:0;border-radius:16px;padding:0;background:var(--panel);color:var(--ink);width:min(560px,96vw);max-height:92vh;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+dialog::backdrop{background:rgba(10,20,30,.45)}
+form.f{padding:22px;display:grid;gap:14px}
+form.f h3{margin:0;font-size:22px}
+fieldset{border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin:0;display:grid;gap:10px}
+legend{font-size:14px;font-weight:600;padding:0 4px}
+label{display:grid;gap:4px;font-size:14px;font-weight:600}
+label span,.hint{font-weight:400;color:var(--mute);font-size:13px}
+input,select{font:inherit;font-size:16px;min-height:44px;padding:8px 12px;border:1.5px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink);width:100%}
+input[type=checkbox]{width:22px;min-height:22px;height:22px}
+.chk{display:flex;align-items:center;gap:10px;font-weight:500}
+.g2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.g3{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:12px}
+.brow{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,.8fr) minmax(0,1fr) 44px;gap:8px;align-items:end}
+.brow button{padding:0;background:transparent;color:var(--coral);font-size:22px}
+.acts{display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end}
+.acts .del{margin-right:auto;background:transparent;color:var(--coral);padding:0 6px}
+.toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;display:flex;gap:14px;align-items:center;opacity:0;pointer-events:none;transition:opacity .2s;max-width:92vw}
+.toast.on{opacity:1;pointer-events:auto}
+.toast button{min-height:34px;background:transparent;color:var(--bg);text-decoration:underline;padding:0 4px}
+textarea{font:inherit;font-size:16px;padding:10px 12px;border:1.5px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink);width:100%;resize:vertical}
+.memo{background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--coral);border-radius:12px;padding:6px 18px}
+.memo p{margin:10px 0}
+.setrow{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;margin-top:28px}
+.inl{display:flex;align-items:center;gap:10px;font-weight:500}.inl input{width:auto}
+.hint{margin:8px 0 0}
+.fillist li{grid-template-columns:5.2em minmax(0,1fr)}.fillist li div div{padding:2px 0}
+summary{font-weight:600}
+@media(max-width:600px){.sched li{grid-template-columns:4.2em minmax(0,1fr);padding:12px 14px}.sched li>button{grid-column:1/-1}.time{font-size:24px}.g2,.g3{grid-template-columns:minmax(0,1fr)}.brow{grid-template-columns:minmax(0,1fr) minmax(0,1fr) 44px}.brow label:nth-child(2){display:none}}
+@media(prefers-reduced-motion:reduce){.toast{transition:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div><h1>Аптечка</h1><p class="sum" id="sum">Загружаю…</p></div>
+    <button class="pri" id="addBtn">+ Лекарство</button>
+  </header>
+  <nav id="nav">
+    <a href="#today" data-v="today">Сегодня</a>
+    <a href="#stock" data-v="stock">Запасы</a>
+    <a href="#order" data-v="order">Заказать <span class="badge" id="ordBadge" hidden></span></a>
+    <a href="#log" data-v="log">Журнал</a>
+  </nav>
+  <p class="note" id="status" hidden></p>
+  <div id="preset"></div>
+  <main id="view"></main>
+</div>
+
+<dialog id="dlg"><form class="f" id="medForm" method="dialog">
+  <h3 id="dlgTitle">Новое лекарство</h3>
+  <label id="pickL">Лекарство<select id="fPick"></select></label>
+  <label>Название<input id="fName" required maxlength="80" placeholder="Например, Витамин D"></label>
+  <fieldset><legend>Назначение врача</legend>
+    <div class="g3">
+      <label>Доза на один приём<input id="fDose" type="number" min="0.001" step="any" required inputmode="decimal" placeholder="25"></label>
+      <label>Единица дозы<input id="fDU" maxlength="12" value="мг" list="duList"></label>
+    </div>
+    <label class="chk"><input type="checkbox" id="fPrn"> По необходимости, без расписания</label>
+    <label id="timesL">Время приёма <span>через запятую</span><input id="fTimes" placeholder="08:00, 20:00" value="08:00"></label>
+    <div class="g2">
+      <label>Курс до <span>пусто — длительно</span><input id="fEnd" type="date"></label>
+      <label>Комментарий<input id="fNote" maxlength="80" placeholder="перед сном"></label>
+    </div>
+  </fieldset>
+  <fieldset><legend>Что есть дома</legend>
+    <p class="hint" style="margin:0">Дозировка одной таблетки может отличаться от назначенной — приложение само посчитает, сколько штук выпить.</p>
+    <div id="fBatches"></div>
+    <button type="button" class="ghost" id="fAddB">+ Упаковка другой дозировки</button>
+  </fieldset>
+  <label><span id="thrLbl">Напомнить заказать, когда останется на (дней)</span><input id="fThr" type="number" min="0" step="1" value="14" required inputmode="numeric"></label>
+  <div class="acts">
+    <button type="button" class="del" id="fDel" hidden>Удалить</button>
+    <button type="button" class="ghost" id="fCancel">Отмена</button>
+    <button type="submit" class="pri">Сохранить</button>
+  </div>
+</form></dialog>
+<datalist id="duList"><option value="мг"><option value="мкг"><option value="г"><option value="мл"><option value="ЕД"><option value="ложка"></datalist>
+
+<dialog id="dlg2"><form class="f" id="refForm" method="dialog">
+  <h3 id="refTitle">Пополнить</h3>
+  <p class="hint" id="refHint" style="margin:0"></p>
+  <div class="g2">
+    <label><span id="rStrL">Дозировка одной штуки</span><input id="rStr" type="number" min="0.001" step="any" required inputmode="decimal"></label>
+    <label>Единица упаковки<input id="rUnit" maxlength="12" value="таб."></label>
+  </div>
+  <label>Сколько штук добавить<input id="rAmt" type="number" min="0.25" step="any" required inputmode="decimal"></label>
+  <div class="acts"><button type="button" class="ghost" id="rCancel">Отмена</button><button type="submit" class="pri">Добавить</button></div>
+</form></dialog>
+
+<dialog id="dlg3"><form class="f" method="dialog">
+  <h3>Удалить лекарство?</h3><p id="delText" style="margin:0"></p>
+  <div class="acts"><button type="button" class="ghost" id="dNo">Отмена</button><button type="button" class="warn" id="dYes">Удалить</button></div>
+</form></dialog>
+
+<dialog id="dlg4"><form class="f" id="memoForm" method="dialog">
+  <h3>Памятка</h3><p class="hint" style="margin:0">Каждая строка — отдельный пункт.</p>
+  <textarea id="memoT" rows="10" maxlength="4000"></textarea>
+  <div class="acts"><button type="button" class="ghost" id="mCancel">Отмена</button><button type="submit" class="pri">Сохранить</button></div>
+</form></dialog>
+
+<dialog id="dlg5"><form class="f" id="xForm" method="dialog">
+  <h3 id="xTitle">Перенос данных</h3>
+  <p class="hint" id="xHint" style="margin:0"></p>
+  <label id="xFileL">Файл с данными<input type="file" id="xFile" accept=".json,application/json,text/plain"></label>
+  <textarea id="xT" rows="8" spellcheck="false" style="font-size:13px"></textarea>
+  <div class="acts" id="xActs"></div>
+</form></dialog>
+
+<dialog id="dlg6"><form class="f" id="syncForm" method="dialog">
+  <h3>Синхронизация через GitHub</h3>
+  <p class="hint" style="margin:0">Данные хранятся в файле <b>data.json</b> вашего приватного репозитория. Введите ключ на каждом своём устройстве — и все они будут показывать одно и то же. Вводите ключ только на своих устройствах.</p>
+  <label>Репозиторий для данных<input id="sRepo" value="Jhenya5/aptechka-data" autocomplete="off" spellcheck="false"></label>
+  <label>Ключ доступа GitHub <span>начинается с github_pat_</span><input id="sTok" type="password" autocomplete="off" spellcheck="false"></label>
+  <p class="hint" style="margin:0"><a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">Создать ключ на GitHub</a> — доступ только к этому репозиторию, право Contents: Read and write.</p>
+  <div class="acts"><button type="button" class="del" id="sOff" hidden>Отключить</button><button type="button" class="ghost" id="sCancel">Отмена</button><button type="submit" class="pri">Подключить</button></div>
+</form></dialog>
+
+<div class="toast" id="toast" role="status"><span id="toastT"></span><button id="toastU" hidden>Отменить</button></div>
+
+<script>
+{
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+const pad=n=>String(n).padStart(2,'0');
+const dkey=d=>d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
+const hm=d=>pad(d.getHours())+':'+pad(d.getMinutes());
+const num=v=>Math.round(v*1000)/1000;
+const fmtN=v=>String(num(v)).replace('.',',');
+const FR={0.25:'¼',0.5:'½',0.75:'¾'};
+const frac=n=>{n=num(n);const w=Math.floor(n),r=num(n-w);return FR[r]?(w||'')+FR[r]:fmtN(n)};
+const plural=(n,a)=>{n=Math.abs(Math.floor(n));const m10=n%10,m100=n%100;return m10==1&&m100!=11?a[0]:m10>=2&&m10<=4&&(m100<10||m100>=20)?a[1]:a[2]};
+const dn=n=>n+' '+plural(n,['день','дня','дней']);
+const fdate=d=>d.toLocaleDateString('ru-RU',{day:'numeric',month:'long'});
+const dayDiff=(a,b)=>Math.round((new Date(a+'T12:00')-new Date(b+'T12:00'))/864e5);
+
+let state={meds:[],log:[],org:{on:true,wd:5,days:7,last:null}};
+let ref=null,db=null,writing=false,dirty=false,timer=null,local=false,preset=null;
+const LS='aptechka-v1';
+
+function save(){
+  state.updatedAt=Date.now();
+  if(local){saveLocal();if(sync){syncDirty=true;clearTimeout(syncTimer);syncTimer=setTimeout(push,1500)}return}
+  if(!ref)return;
+  dirty=true;clearTimeout(timer);timer=setTimeout(flush,400);
+}
+async function flush(){
+  if(writing||!dirty)return;
+  writing=true;dirty=false;
+  try{await ref.set(JSON.parse(JSON.stringify(state)))}
+  catch(e){status(e&&e.code==='quota_exceeded'?'Хранилище заполнено — удалите старые записи.':'Не удалось сохранить, попробую ещё раз.',true);dirty=true}
+  writing=false;
+  if(dirty)timer=setTimeout(flush,1500);
+}
+/* ---- синхронизация через GitHub (только вне Claude) ---- */
+const SK='aptechka-sync';
+let sync=null;try{sync=JSON.parse(localStorage.getItem(SK)||'null')}catch(e){}
+let syncSha=null,syncBusy=false,syncDirty=false,syncTimer=null,syncSt={t:'',err:false},installEv=null;
+function saveLocal(){try{localStorage.setItem(LS,JSON.stringify(state))}catch(e){}}
+const ghUrl=()=>`https://api.github.com/repos/${sync.repo}/contents/data.json`;
+const ghH=()=>({Authorization:'Bearer '+sync.token,Accept:'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28'});
+const b64e=t=>{const b=new TextEncoder().encode(t);let r='';for(let i=0;i<b.length;i+=0x8000)r+=String.fromCharCode.apply(null,b.subarray(i,i+0x8000));return btoa(r)};
+const b64d=t=>new TextDecoder().decode(Uint8Array.from(atob(t.replace(/\s/g,'')),c=>c.charCodeAt(0)));
+const ghErr=c=>c===401?'ключ недействителен или истёк':c===403?'у ключа нет прав на запись (Contents: Read and write)':c===404?'репозиторий не найден или ключ не даёт к нему доступа':'ошибка GitHub '+c;
+function setSync(err,t){syncSt={err,t:t||(err?'ошибка':'синхронизировано в '+hm(new Date()))};const e=$('syncSt');if(e){e.textContent=syncSt.t;e.style.color=err?'var(--coral)':''}}
+async function pull(){
+  if(!sync||syncBusy||!navigator.onLine)return;
+  syncBusy=true;
+  try{
+    const r=await fetch(ghUrl(),{headers:ghH(),cache:'no-store'});
+    if(r.status===404){syncSha=null;syncDirty=true}
+    else if(!r.ok)throw new Error(ghErr(r.status));
+    else{
+      const j=await r.json();syncSha=j.sha;
+      const o=JSON.parse(b64d(j.content||'')),rd=o&&o.data?o.data:o;
+      if(rd&&Array.isArray(rd.meds)){
+        if(!syncDirty&&(rd.updatedAt||0)>(state.updatedAt||0)){adopt(rd);saveLocal();render()}
+        else if((state.updatedAt||0)>(rd.updatedAt||0))syncDirty=true;
+      }
+      setSync(false);
+    }
+  }catch(e){setSync(true,'Синхронизация: '+(e.message||'нет связи'))}
+  syncBusy=false;
+  if(syncDirty)push();
+}
+async function push(){
+  if(!sync)return;
+  if(syncBusy){syncDirty=true;return}
+  syncBusy=true;syncDirty=false;
+  const put=sha=>fetch(ghUrl(),{method:'PUT',headers:{...ghH(),'Content-Type':'application/json'},
+    body:JSON.stringify({message:'Аптечка: '+new Date().toISOString(),content:b64e(JSON.stringify({app:'aptechka',v:1,data:state})),...(sha?{sha}:{})})});
+  try{
+    let r=await put(syncSha);
+    if(r.status===409||r.status===422){const g=await fetch(ghUrl(),{headers:ghH(),cache:'no-store'});syncSha=g.ok?(await g.json()).sha:null;r=await put(syncSha)}
+    if(!r.ok)throw new Error(ghErr(r.status));
+    syncSha=(await r.json()).content.sha;setSync(false);
+  }catch(e){syncDirty=true;setSync(true,'Не сохранилось на GitHub: '+(e.message||'нет связи')+'. Повторю позже.')}
+  syncBusy=false;
+}
+addEventListener('beforeinstallprompt',e=>{e.preventDefault();installEv=e;render()});
+
+function status(t,alert){const s=$('status');s.hidden=!t;s.textContent=t||'';s.classList.toggle('alert',!!alert)}
+
+/* ---- расчёты ---- */
+const live=m=>m.batches.filter(b=>b.count>1e-9);
+const dayOff=()=>{const[h,mm]=(state.dayStart||'05:00').split(':');return(+h)*60+(+mm)};
+const lnow=()=>new Date(Date.now()-dayOff()*60000);
+const tkey=t=>{const[h,mm]=t.split(':');return((+h)*60+(+mm)-dayOff()+1440)%1440};
+const total=m=>m.batches.reduce((s,b)=>s+b.str*b.count,0);
+const perDay=m=>m.prn?0:m.dose*m.times.length;
+/* таблетница: запас в ней уже вычтен из упаковок */
+const orgOn=()=>!!state.org?.on;
+const orgDays=()=>Math.max(1,+state.org?.days||7);
+const orgLeft=()=>orgOn()&&state.org.last?Math.max(0,orgDays()-dayDiff(dkey(lnow()),state.org.last)):0;
+const WD=['воскресенье','понедельник','вторник','среда','четверг','пятница','суббота'];
+const WDS=['вс','пн','вт','ср','чт','пт','сб'];
+const daysLeft=m=>perDay(m)?Math.floor(total(m)/perDay(m)+1e-9)+(orgOn()?orgLeft():0):null;
+const weekNeed=m=>{const c=courseLeft(m);return perDay(m)*(c!==null?Math.max(0,Math.min(orgDays(),c)):orgDays())};
+const courseLeft=m=>m.end?dayDiff(m.end,dkey(lnow()))+1:null;
+const finished=m=>{const c=courseLeft(m);return c!==null&&c<=0};
+function needOrder(m){
+  if(finished(m))return false;
+  if(m.prn)return total(m)/m.dose<=m.thr;
+  const d=daysLeft(m),c=courseLeft(m);
+  if(c!==null&&d>=c)return false;
+  return d<=m.thr;
+}
+/* сколько каких таблеток выпить на один приём */
+function plan(m){
+  const need=m.dose,av=live(m);
+  const nice=av.map(b=>({b,n:need/b.str})).filter(x=>Math.abs(x.n*4-Math.round(x.n*4))<1e-6&&x.n<=4&&x.b.count>=x.n-1e-9)
+    .sort((a,b)=>(Number.isInteger(num(a.n))?0:10)+a.n-((Number.isInteger(num(b.n))?0:10)+b.n));
+  if(nice.length)return{parts:[{b:nice[0].b,n:num(nice[0].n)}],ok:true};
+  let rem=need;const parts=[];
+  for(const b of [...av].sort((a,b)=>b.str-a.str)){
+    const k=Math.min(b.count,Math.floor(rem/b.str*2+1e-6)/2);
+    if(k>0){parts.push({b,n:num(k)});rem=num(rem-k*b.str)}
+    if(rem<=1e-9)break;
+  }
+  if(rem>1e-9){ // делимая упаковка (туба, флакон): берём нужную часть
+    const b=[...av].sort((a,b)=>a.str-b.str).find(b=>b.count*b.str-(parts.find(p=>p.b===b)?.n||0)*b.str>=rem-1e-9);
+    if(b){const p=parts.find(p=>p.b===b);if(p)p.n=num(p.n+rem/b.str);else parts.push({b,n:rem/b.str});rem=0}
+  }
+  return{parts,ok:rem<=1e-9,miss:rem};
+}
+const partTxt=(n,str,unit,du,showStr)=>Math.abs(n*4-Math.round(n*4))<1e-6
+  ?`${frac(n)} ${esc(unit)}${showStr?' по '+fmtN(str)+' '+esc(du):''}`
+  :`${fmtN(n*str)} ${esc(du)} из ${esc(unit)}`;
+function planText(m){
+  if(!m.batches.some(b=>b.count>0))return'<span class="pill bad">нет в наличии</span>';
+  const p=plan(m);
+  const t=p.parts.map(x=>partTxt(x.n,x.b.str,x.b.unit,m.du,x.b.str!==m.dose||p.parts.length>1)).join(' + ');
+  return p.ok?`<span class="pill">${t}</span>`:`<span class="pill bad">${t?t+' — ':''}не хватает ${fmtN(p.miss)} ${esc(m.du)}</span>`;
+}
+const taken=(m,slot,day)=>state.log.find(l=>l.kind==='take'&&l.medId===m.id&&l.slot===slot&&l.day===day);
+
+function take(m,slot,at){ // at={day,ts} — отметка задним числом (из уведомления)
+  const now=at?new Date(at.ts):new Date(),p=plan(m),fromOrg=orgOn()&&!m.prn;
+  if(!fromOrg)for(const x of p.parts)x.b.count=Math.max(0,num(x.b.count-x.n));
+  const e={id:uid(),kind:'take',medId:m.id,name:m.name,slot,day:at?at.day:dkey(lnow()),ts:now.getTime(),amt:m.dose,du:m.du,org:fromOrg,
+    parts:fromOrg?[]:p.parts.map(x=>({bid:x.b.id,n:x.n,str:x.b.str,unit:x.b.unit}))};
+  state.log.unshift(e);state.log=state.log.slice(0,500);
+  save();render();
+  if(at)return;
+  const d=daysLeft(m);
+  toast(`${m.name}: отмечено${d!==null?`, запаса на ${dn(d)}`:''}`,()=>undo(e.id));
+}
+function undo(id){
+  const i=state.log.findIndex(l=>l.id===id);if(i<0)return;
+  const e=state.log[i];
+  if(e.kind==='fill'){
+    for(const it of e.items||[]){const mm=state.meds.find(x=>x.id===it.medId);if(!mm)continue;
+      for(const x of it.parts){let b=mm.batches.find(b=>b.id===x.bid);if(!b){b={id:x.bid,str:x.str,unit:x.unit,count:0};mm.batches.push(b)}b.count=num(b.count+x.n)}}
+    state.org.last=e.prevFill||null;
+    state.log.splice(i,1);save();render();toast('Заполнение отменено, запасы возвращены');return;
+  }
+  const m=state.meds.find(x=>x.id===e.medId);
+  if(m)for(const x of e.parts||[]){
+    let b=m.batches.find(b=>b.id===x.bid);
+    if(!b&&e.kind==='take'){b={id:x.bid,str:x.str,unit:x.unit,count:0};m.batches.push(b)}
+    if(b)b.count=Math.max(0,num(b.count+(e.kind==='take'?x.n:-x.n)));
+  }
+  state.log.splice(i,1);save();render();toast('Отменено');
+}
+
+function fill(){
+  const now=new Date(),day=dkey(lnow()),items=[];let short=[];
+  for(const m of state.meds.filter(m=>!m.prn&&!finished(m))){
+    const c=courseLeft(m),n=(c!==null?Math.min(orgDays(),c):orgDays())*m.times.length,agg={};let miss=false;
+    for(let i=0;i<n;i++){
+      const p=plan(m);if(!p.ok)miss=true;
+      for(const x of p.parts){x.b.count=Math.max(0,num(x.b.count-x.n));const a=agg[x.b.id]||(agg[x.b.id]={bid:x.b.id,n:0,str:x.b.str,unit:x.b.unit});a.n=num(a.n+x.n)}
+    }
+    if(miss)short.push(m.name);
+    items.push({medId:m.id,name:m.name,du:m.du,parts:Object.values(agg)});
+  }
+  const e={id:uid(),kind:'fill',name:'Таблетница',day,ts:now.getTime(),items,prevFill:state.org.last||null};
+  state.org.last=day;state.log.unshift(e);state.log=state.log.slice(0,500);
+  save();render();
+  toast(short.length?`Таблетница заполнена, но не хватило: ${short.join(', ')}`:`Таблетница заполнена на ${dn(orgDays())}`,()=>undo(e.id));
+}
+function orgBlock(slots){
+  const today=dkey(lnow()),wd=+state.org.wd,isDay=lnow().getDay()===wd;
+  const left=orgLeft(),filledToday=state.org.last===today,due=!filledToday&&(isDay||left===0);
+  const times=[...new Set(slots.map(s=>s.t))];
+  const list=times.map(t=>`<li><span class="time">${t}</span><div>${slots.filter(s=>s.t===t).map(({m})=>`<div><b>${esc(m.name)}</b> — ${planText(m)}</div>`).join('')}</div></li>`).join('');
+  const end=new Date(lnow());end.setDate(end.getDate()+left);
+  const head=filledToday?`Заполнена сегодня — хватит на ${dn(orgDays())}`:
+    state.org.last?`Заполнена ${fdate(new Date(state.org.last+'T12:00'))}${left?`, в ней ещё на ${dn(left)}`:', уже пустая'}`:'Ещё не отмечали заполнение';
+  return `<h2>Таблетница</h2><div class="banner"${due?' style="background:var(--coral-soft)"':''}><p>${due?`<b>Пора заполнить таблетницу.</b> `:''}${head}. День заполнения — ${WD[wd]}.</p>
+  <div class="row" style="margin:0"><button class="${due?'pri':'ghost'}" data-a="fill">Заполнил на ${dn(orgDays())}</button>${due?`<button class="ghost" data-a="fillMark" title="Если запасы в упаковках уже указаны после заполнения">Уже заполнена в ${WDS[wd]}, без списания</button>`:''}</div></div>
+  <details${due?' open':''}><summary class="sub" style="cursor:pointer;min-height:44px;display:flex;align-items:center">Что положить в каждую ячейку</summary>
+  <ul class="sched fillist">${list||'<li>Нет лекарств с расписанием</li>'}</ul></details>
+  <p class="hint">Кнопка «Заполнил» спишет из упаковок запас на ${dn(orgDays())}. Отметки «Принять» при таблетнице запас не трогают.</p>`;
+}
+
+function openX(mode){
+  const exp=mode==='exp';
+  $('xTitle').textContent=exp?'Экспорт данных':'Импорт данных';
+  $('xHint').textContent=exp?'Здесь всё: лекарства, запасы, памятка, таблетница и журнал. Скопируйте текст или скачайте файл и откройте «Импорт» в другой версии Аптечки.':'Вставьте текст из «Экспорта» или выберите файл. Текущие данные на этом устройстве будут заменены.';
+  $('xFileL').hidden=exp;$('xFile').value='';
+  $('xT').readOnly=exp;$('xT').placeholder=exp?'':'Вставьте сюда текст экспорта';
+  $('xT').value=exp?JSON.stringify({app:'aptechka',v:1,exported:new Date().toISOString(),data:state}):'';
+  $('xActs').innerHTML=exp?'<button type="button" class="ghost" data-a="xClose">Закрыть</button><button type="button" class="ghost" data-a="xSave">Скачать файл</button><button type="button" class="pri" data-a="xCopy">Копировать</button>'
+    :'<button type="button" class="ghost" data-a="xClose">Отмена</button><button type="button" class="pri" data-a="xDo">Загрузить данные</button>';
+  $('dlg5').showModal();if(exp)$('xT').select();
+}
+$('xFile').onchange=async()=>{const f=$('xFile').files[0];if(f)$('xT').value=await f.text()};
+
+$('syncForm').onsubmit=e=>{
+  e.preventDefault();
+  const repo=$('sRepo').value.trim().replace(/^https?:\/\/github\.com\//,'').replace(/\/$/,''),tok=$('sTok').value.trim()||sync?.token;
+  if(!/^[\w.-]+\/[\w.-]+$/.test(repo)){toast('Укажите репозиторий как владелец/имя');return}
+  if(!tok){toast('Вставьте ключ доступа');return}
+  const changed=!sync||sync.repo!==repo;
+  sync={repo,token:tok};try{localStorage.setItem(SK,JSON.stringify(sync))}catch(err){}
+  if(changed)syncSha=null;
+  $('dlg6').close();status('');render();setSync(false,'подключаю…');pull();
+};
+$('sCancel').onclick=()=>$('dlg6').close();
+$('sOff').onclick=()=>{sync=null;syncSha=null;try{localStorage.removeItem(SK)}catch(err){}$('dlg6').close();render();toast('Синхронизация отключена, данные остались на устройстве')};
+addEventListener('visibilitychange',()=>{if(!document.hidden&&sync&&local)pull()});
+addEventListener('online',()=>{if(sync&&local)pull()});
+setInterval(()=>{if(sync&&local&&!document.hidden)pull()},60000);
+
+let tt;
+function toast(t,u){
+  $('toastT').textContent=t;const b=$('toastU');b.hidden=!u;b.onclick=()=>{u()};
+  $('toast').classList.add('on');clearTimeout(tt);tt=setTimeout(()=>$('toast').classList.remove('on'),5000);
+}
+
+function viewName(){const h=location.hash.slice(1);return['today','stock','order','log'].includes(h)?h:'today'}
+const doseLbl=m=>`${fmtN(m.dose)} ${esc(m.du)}`;
+
+function render(){
+  bridgePost();
+  const v=viewName(),meds=state.meds,today=dkey(lnow()),now=tkey(hm(new Date()));
+  for(const a of document.querySelectorAll('#nav a'))a.toggleAttribute('aria-current',a.dataset.v===v);
+  const low=meds.filter(needOrder);
+  const b=$('ordBadge');b.hidden=!low.length;b.textContent=low.length;
+  const act=meds.filter(m=>!finished(m));
+  const slots=[];
+  for(const m of act)if(!m.prn)for(const t of m.times)slots.push({m,t});
+  slots.sort((a,b)=>tkey(a.t)-tkey(b.t)||a.m.name.localeCompare(b.m.name,'ru'));
+  const doneN=slots.filter(s=>taken(s.m,s.t,today)).length;
+  $('sum').innerHTML=meds.length?`Сегодня принято <b>${doneN} из ${slots.length}</b>${low.length?` · пора заказать: <b>${low.length}</b>`:''}`:'Добавьте первое лекарство, чтобы начать';
+  const showP=preset&&state.presetV!==preset.v;
+  $('preset').innerHTML=showP?`<div class="banner"><p>${meds.length?'Есть обновлённое назначение':'Есть готовое назначение'} — ${preset.meds.length} ${plural(preset.meds.length,['препарат','препарата','препаратов'])}${preset.dayStart?', время под ваш режим':''}.${meds.length?' Заменить им текущий список? Запасы, которые вы уже ввели, перенесутся к тем же лекарствам.':' Останется указать, что есть дома.'}</p><div class="row" style="margin:0"><button class="ghost" data-a="presetNo">Не нужно</button><button class="pri" data-a="preset">${meds.length?'Заменить список':'Загрузить назначение'}</button></div></div>`:'';
+  const el=$('view');
+  if(!meds.length&&v!=='log'){el.innerHTML=`<div class="empty"><p>Пока пусто. Добавьте лекарство: назначенную дозу, время приёма и какие упаковки есть дома — аптечка посчитает, сколько таблеток пить, на сколько дней хватит и когда заказывать новое.</p><div class="row" style="justify-content:center"><button class="pri" data-a="add">+ Добавить лекарство</button><button class="ghost" data-a="imp">Импорт данных</button></div></div>`;return}
+
+  if(v==='today'){
+    const prn=act.filter(m=>m.prn);
+    el.innerHTML=(slots.length?`<ul class="sched">${slots.map(({m,t})=>{
+      const e=taken(m,t,today),late=!e&&tkey(t)<now;
+      const what=e?(e.parts||[]).map(x=>partTxt(x.n,x.str,x.unit,m.du,true)).join(' + ')||'отмечено':orgOn()&&!m.prn?'<span class="pill">из таблетницы</span>':planText(m);
+      return `<li class="${e?'done':late?'late':''}"><span class="time">${t}</span>
+      <div><div class="nm">${esc(m.name)} <span class="sub">${doseLbl(m)}</span></div><div class="sub">${e?what:(orgOn()&&!m.prn?'':'Выпить: ')+what}${m.note?' · '+esc(m.note):''}${late?' · пропущено?':''}</div></div>
+      ${e?`<button class="took" data-a="undo" data-id="${e.id}" title="Отменить отметку">✓ ${hm(new Date(e.ts))}</button>`:`<button class="take" data-a="take" data-id="${m.id}" data-t="${t}">Принять</button>`}</li>`}).join('')}</ul>`:'<p class="note">Нет лекарств с расписанием.</p>')+
+    (prn.length?`<h2>По необходимости</h2><ul class="sched">${prn.map(m=>{const c=state.log.filter(l=>l.kind==='take'&&l.medId===m.id&&l.day===today).length;
+      return `<li><span class="time" style="font-size:18px">${c?c+'×':'—'}</span><div><div class="nm">${esc(m.name)} <span class="sub">${doseLbl(m)}</span></div><div class="sub">Выпить: ${planText(m)}</div></div><button class="take" data-a="take" data-id="${m.id}" data-t="">Принял</button></li>`}).join('')}</ul>`:'')+
+    (orgOn()?orgBlock(slots):'')+
+    (state.memo?`<h2>Памятка</h2><div class="memo">${state.memo.split(/\n+/).filter(Boolean).map(x=>`<p>${esc(x)}</p>`).join('')}</div>`:'')+
+    `<div class="setrow"><label class="inl">Мой день начинается в <input type="time" id="dayStart" value="${esc(state.dayStart||'05:00')}"></label><button class="ghost" data-a="memo">${state.memo?'Изменить памятку':'Добавить памятку'}</button></div>
+    <div class="setrow" style="margin-top:12px"><span class="sub">Перенос на другое устройство или в другую версию</span><div class="row" style="margin:0"><button class="ghost" data-a="exp">Экспорт</button><button class="ghost" data-a="imp">Импорт</button></div></div>
+    ${local?`<div class="setrow" style="margin-top:12px"><span class="sub">Синхронизация: ${sync?`<b>${esc(sync.repo)}</b> · <span id="syncSt">${esc(syncSt.t||'подключена')}</span>`:'выключена — данные только на этом устройстве'}</span><div class="row" style="margin:0">${sync?'<button class="ghost" data-a="syncNow">Обновить</button>':''}<button class="ghost" data-a="syncCfg">${sync?'Настройки':'Настроить'}</button>${installEv?'<button class="pri" data-a="install">Установить приложение</button>':''}</div></div>`:''}
+    <div class="setrow" style="margin-top:12px"><label class="inl"><input type="checkbox" id="orgOn"${orgOn()?' checked':''}> Раскладываю в таблетницу</label>
+    ${orgOn()?`<label class="inl">заполняю в <select id="orgWd" style="width:auto">${WDS.map((w,i)=>`<option value="${i}"${+state.org.wd===i?' selected':''}>${WD[i]}</option>`).join('')}</select> на <input type="number" id="orgDays" min="1" max="31" value="${orgDays()}" style="width:4.5em"> дн.</label>`:''}</div>
+    <p class="hint">Приёмы после полуночи, но до начала нового дня, считаются вчерашними — удобно, если ложитесь поздно.</p>`;
+  }
+  if(v==='stock'){
+    const key=m=>finished(m)?1e9:daysLeft(m)??1e8;
+    el.innerHTML=`<div class="cards">${[...meds].sort((a,b)=>key(a)-key(b)).map(card).join('')}</div>`;
+  }
+  if(v==='order'){
+    el.innerHTML=low.length?`<p class="note">Заканчиваются — пора заказать. В скобках назначенная доза на приём; можно купить и другую дозировку, приложение пересчитает.</p><ul class="order">${low.map(m=>{const d=daysLeft(m),c=courseLeft(m);
+      return `<li><div><div class="nm">${esc(m.name)} <span class="sub">(${doseLbl(m)})</span></div>
+      <div class="sub"><span class="days">${!total(m)?'нет в наличии':d===null?'осталось мало':d===0?'закончится сегодня':'хватит на '+dn(d)}</span>${c!==null?' · курс ещё '+dn(c):''}${orgOn()&&!m.prn&&total(m)<weekNeed(m)-1e-9?' · на следующее заполнение таблетницы не хватит':''}</div></div>
+      <button class="ghost" data-a="refill" data-id="${m.id}">Купил, пополнить</button></li>`}).join('')}</ul>
+      <button class="pri" data-a="copy">Скопировать список покупок</button>`:
+      `<div class="empty"><p>Всего хватает. Как только запас станет меньше порога, лекарство появится здесь.</p></div>`;
+    const soon=meds.filter(m=>!needOrder(m)&&!finished(m)&&daysLeft(m)!==null&&!(courseLeft(m)!==null&&daysLeft(m)>=courseLeft(m))).sort((a,b)=>daysLeft(a)-daysLeft(b)).slice(0,6);
+    if(soon.length)el.innerHTML+=`<h2>Следующие на очереди</h2><ul class="order">${soon.map(m=>{const end=new Date();end.setDate(end.getDate()+daysLeft(m)-m.thr);
+      return `<li><div class="nm">${esc(m.name)}</div><div class="sub">заказать примерно ${fdate(end)}</div></li>`}).join('')}</ul>`;
+  }
+  if(v==='log'){
+    if(!state.log.length){el.innerHTML='<div class="empty"><p>Здесь появятся отметки о приёме и пополнениях.</p></div>';return}
+    const g={};for(const l of state.log)(g[l.day]=g[l.day]||[]).push(l);
+    el.innerHTML=Object.keys(g).sort().reverse().slice(0,30).map(d=>`<h2>${d===today?'Сегодня':fdate(new Date(d+'T12:00'))}</h2><ul class="log">${g[d].map(l=>{
+      if(l.kind==='fill')return `<li><time>${hm(new Date(l.ts))}</time><span class="r">Таблетница заполнена: ${(l.items||[]).map(it=>esc(it.name)+' '+(it.parts.map(x=>partTxt(x.n,x.str,x.unit,it.du,true)).join(' + ')||'—')).join('; ')} <button class="took" data-a="undo" data-id="${l.id}">отменить</button></span></li>`;
+      const p=(l.parts||[]).map(x=>partTxt(x.n,x.str,x.unit,l.du||'',true)).join(' + ');
+      return `<li><time>${hm(new Date(l.ts))}</time><span${l.kind==='refill'?' class="r"':''}>${l.kind==='refill'?'Пополнено: '+esc(l.name)+' +'+p:esc(l.name)+' — '+(p||(l.org?'из таблетницы':'нет в наличии'))}${l.slot?' <span class="sub">(приём '+l.slot+')</span>':''}</span></li>`}).join('')}</ul>`).join('');
+  }
+}
+
+function card(m){
+  const d=daysLeft(m),lowC=needOrder(m),fin=finished(m),c=courseLeft(m);
+  const left=Math.floor(total(m)/m.dose+1e-9),cells=Math.min(left,42),cap=Math.max(cells,Math.min(m.prn?20:m.times.length*14,42));
+  const end=new Date();if(d!==null)end.setDate(end.getDate()+d);
+  const bs=live(m);
+  return `<div class="card${lowC?' low':''}${fin?' fin':''}"><div><h3>${esc(m.name)}</h3><div class="sub">${doseLbl(m)} · ${m.prn?'по необходимости':m.times.join(', ')}${m.end?(fin?' · курс окончен':' · курс до '+fdate(new Date(m.end+'T12:00'))):''}</div></div>
+  <div class="big">${left} <small>${plural(left,['приём','приёма','приёмов'])} ${orgOn()&&!m.prn?'в упаковках':'в запасе'}</small></div>
+  <div class="blister" aria-hidden="true">${Array.from({length:cap},(_,i)=>`<i${i<cells?'':' class="e"'}></i>`).join('')}</div>
+  ${bs.length?`<ul class="packs">${bs.map(b=>`<li><span>по ${fmtN(b.str)} ${esc(m.du)}</span><span>${fmtN(b.count)} ${esc(b.unit)}</span></li>`).join('')}</ul>`:'<div class="sub" style="color:var(--coral)">Нет в наличии — укажите, что есть дома</div>'}
+  <div class="sub">${fin?'Курс завершён':d===null?'Расход по необходимости':d===0?'<b style="color:var(--coral)">Закончится сегодня</b>':`Хватит на <b>${dn(d)}</b>, до ${fdate(end)}`}${c!==null&&!fin&&d!==null&&d>=c?' — до конца курса хватит':''}</div>
+  <div class="row"><button class="ghost" data-a="refill" data-id="${m.id}">Пополнить</button><button class="ghost" data-a="edit" data-id="${m.id}">Изменить</button></div></div>`;
+}
+
+/* ---- форма ---- */
+let editId=null,refId=null;
+function bRow(b){
+  const r=document.createElement('div');r.className='brow';r.dataset.id=b.id||uid();
+  r.innerHTML=`<label>Дозировка 1 шт.<input class="bs" type="number" min="0.001" step="any" inputmode="decimal" value="${b.str??''}" placeholder="50"></label>
+  <label>Ед.<input class="bu" maxlength="12" value="${esc(b.unit||'таб.')}"></label>
+  <label>Сколько штук<input class="bc" type="number" min="0" step="any" inputmode="decimal" value="${b.count??''}" placeholder="28"></label>
+  <button type="button" aria-label="Убрать упаковку" data-rm>×</button>`;
+  r.querySelector('[data-rm]').onclick=()=>r.remove();
+  $('fBatches').append(r);
+}
+const normName=t=>String(t||'').toLowerCase().replace(/ё/g,'е').replace(/[^a-zа-я0-9]+/g,' ').trim();
+function openForm(m){
+  const sorted=[...state.meds].sort((a,b)=>a.name.localeCompare(b.name,'ru'));
+  $('fPick').innerHTML=sorted.map(x=>`<option value="${x.id}">${esc(x.name)} — ${fmtN(x.dose)} ${esc(x.du)}${finished(x)?' (курс окончен)':''}</option>`).join('')+'<option value="__new">+ Новое лекарство (назначил врач)</option>';
+  $('fPick').value=m?m.id:'__new';$('pickL').hidden=!state.meds.length;
+  fillForm(m);$('dlg').showModal();(m?$('fPick'):$('fName')).focus();
+}
+$('fPick').onchange=()=>{const v=$('fPick').value;fillForm(v==='__new'?null:state.meds.find(x=>x.id===v));if(v==='__new')$('fName').focus()};
+function fillForm(m){
+  editId=m?m.id:null;
+  $('dlgTitle').textContent=m?'Изменить: '+m.name:'Новое лекарство';
+  $('fName').value=m?m.name:'';$('fDose').value=m?m.dose:'';$('fDU').value=m?m.du:'мг';
+  $('fPrn').checked=m?m.prn:false;$('fTimes').value=m?m.times.join(', '):([...new Set(state.meds.flatMap(x=>x.times))].sort((a,b)=>tkey(a)-tkey(b))[0]||'09:00');
+  $('fEnd').value=m?.end||'';$('fNote').value=m?.note||'';$('fThr').value=m?m.thr:14;
+  $('fBatches').innerHTML='';
+  const bs=m?m.batches.filter(b=>b.str>0):[];
+  if(bs.length)bs.forEach(bRow);else bRow({str:m?m.dose:'',unit:'таб.'});
+  $('fDel').hidden=!m;syncPrn();
+}
+function syncPrn(){const p=$('fPrn').checked;$('timesL').hidden=p;$('thrLbl').textContent=p?'Напомнить заказать, когда останется (приёмов)':'Напомнить заказать, когда останется на (дней)'}
+$('fPrn').onchange=syncPrn;
+$('fAddB').onclick=()=>bRow({unit:'таб.'});
+$('fDose').oninput=()=>{const f=$('fBatches').querySelector('.bs');if(f&&!f.value&&$('fBatches').children.length===1)f.placeholder=$('fDose').value||'50'};
+$('medForm').onsubmit=e=>{
+  e.preventDefault();
+  const prn=$('fPrn').checked;
+  const times=[...new Set(($('fTimes').value.match(/\d{1,2}[:.]\d{2}/g)||[]).map(t=>{const[h,mm]=t.split(/[:.]/);return pad(Math.min(23,+h))+':'+pad(Math.min(59,+mm))}))].sort();
+  if(!prn&&!times.length){$('fTimes').setCustomValidity('Укажите время, например 08:00');$('fTimes').reportValidity();return}
+  const batches=[...$('fBatches').children].map(r=>({id:r.dataset.id,str:+r.querySelector('.bs').value||0,unit:r.querySelector('.bu').value.trim()||'шт.',count:num(+r.querySelector('.bc').value||0)})).filter(b=>b.str>0&&b.count>0);
+  const dup=state.meds.find(x=>x.id!==editId&&normName(x.name)===normName($('fName').value));
+  if(dup){$('fPick').value=dup.id;fillForm(dup);toast(`«${dup.name}» уже есть в списке — открыл его`);return}
+  const d={name:$('fName').value.trim(),dose:+$('fDose').value,du:$('fDU').value.trim()||'мг',prn,times:prn?[]:times,
+    end:$('fEnd').value||null,note:$('fNote').value.trim(),thr:Math.max(0,+$('fThr').value||0)};
+  if(editId){const m=state.meds.find(m=>m.id===editId);Object.assign(m,d);m.batches=[...batches,...m.batches.filter(b=>b.count<=0&&!batches.some(x=>x.id===b.id))]}
+  else{state.meds.push({id:uid(),...d,batches});toast(`«${d.name}» добавлено в список`)}
+  $('dlg').close();save();render();
+};
+$('fTimes').oninput=()=>$('fTimes').setCustomValidity('');
+$('fCancel').onclick=()=>$('dlg').close();
+$('fDel').onclick=()=>{const m=state.meds.find(x=>x.id===editId);$('dlg').close();$('delText').textContent=`«${m.name}» пропадёт из списка. Записи журнала останутся.`;$('dlg3').showModal()};
+$('dNo').onclick=()=>$('dlg3').close();
+$('dYes').onclick=()=>{state.meds=state.meds.filter(m=>m.id!==editId);$('dlg3').close();save();render()};
+
+$('refForm').onsubmit=e=>{
+  e.preventDefault();const m=state.meds.find(x=>x.id===refId),str=+$('rStr').value,a=num(+$('rAmt').value||0),unit=$('rUnit').value.trim()||'шт.';
+  if(!m||!a||!str)return;
+  let b=m.batches.find(x=>num(x.str)===num(str)&&x.unit===unit);
+  if(!b){b={id:uid(),str,unit,count:0};m.batches.push(b)}
+  b.count=num(b.count+a);const now=new Date();
+  state.log.unshift({id:uid(),kind:'refill',medId:m.id,name:m.name,slot:null,day:dkey(lnow()),ts:now.getTime(),du:m.du,parts:[{bid:b.id,n:a,str,unit}]});
+  $('dlg2').close();save();render();
+  const d=daysLeft(m);toast(`${m.name}: добавлено${d!==null?`, теперь хватит на ${dn(d)}`:''}`);
+};
+$('rCancel').onclick=()=>$('dlg2').close();
+$('addBtn').onclick=()=>openForm(null);
+$('memoForm').onsubmit=e=>{e.preventDefault();state.memo=$('memoT').value.trim();$('dlg4').close();save();render()};
+$('mCancel').onclick=()=>$('dlg4').close();
+document.addEventListener('change',e=>{const t=e.target;
+  if(t.id==='orgOn'){state.org={...state.org,on:t.checked};save();render()}
+  if(t.id==='orgWd'){state.org.wd=+t.value;save();render()}
+  if(t.id==='orgDays'&&+t.value>=1){state.org.days=Math.min(31,Math.round(+t.value));save();render()}
+});
+document.addEventListener('change',e=>{if(e.target.id==='dayStart'&&/^\d\d:\d\d$/.test(e.target.value)){state.dayStart=e.target.value;save();render()}});
+
+document.addEventListener('click',async e=>{
+  const b=e.target.closest('[data-a]');if(!b)return;
+  const a=b.dataset.a,m=state.meds.find(x=>x.id===b.dataset.id);
+  if(a==='add')openForm(null);
+  if(a==='fill')fill();
+  if(a==='syncCfg'){$('sRepo').value=sync?.repo||'Jhenya5/aptechka-data';$('sTok').value='';$('sTok').placeholder=sync?'оставьте пустым, чтобы не менять':'';$('sOff').hidden=!sync;$('dlg6').showModal()}
+  if(a==='syncNow'){setSync(false,'проверяю…');pull()}
+  if(a==='install'&&installEv){installEv.prompt();installEv.userChoice.finally(()=>{installEv=null;render()})}
+  if(a==='exp')openX('exp');
+  if(a==='imp')openX('imp');
+  if(a==='xCopy'){try{await navigator.clipboard.writeText($('xT').value);toast('Скопировано — вставьте в «Импорт» на другом устройстве')}catch(err){$('xT').select();toast('Выделил текст — скопируйте его вручную (Ctrl+C)')}}
+  if(a==='xSave'){
+    const fn='aptechka-'+dkey(new Date())+'.json',txt=$('xT').value;
+    const dl=window.claude&&window.claude.use?await window.claude.use('downloads').catch(()=>null):null;
+    if(dl){try{await dl.save({filename:fn,data:txt});toast('Файл сохранён')}catch(err){toast('Файл не сохранён — можно нажать «Копировать»')}return}
+    try{const u=URL.createObjectURL(new Blob([$('xT').value],{type:'application/json'}));const l=document.createElement('a');l.href=u;l.download=fn;document.body.append(l);l.click();l.remove();setTimeout(()=>URL.revokeObjectURL(u),5000);toast('Если файл не скачался — используйте «Копировать»')}catch(err){toast('Скачать не получилось — используйте «Копировать»')}}
+  if(a==='xClose')$('dlg5').close();
+  if(a==='xDo'){
+    let o;try{o=JSON.parse($('xT').value)}catch(err){toast('Не похоже на данные Аптечки — проверьте текст');return}
+    const d=o&&o.data?o.data:o;
+    if(!d||!Array.isArray(d.meds)){toast('В данных нет списка лекарств');return}
+    if(state.meds.length&&b.dataset.sure!=='1'){b.dataset.sure='1';b.textContent='Точно заменить?';return}
+    adopt(d);save();$('dlg5').close();render();toast(`Загружено: ${state.meds.length} ${plural(state.meds.length,['лекарство','лекарства','лекарств'])}`);
+  }
+  if(a==='fillMark'){const d=lnow();while(d.getDay()!==+state.org.wd)d.setDate(d.getDate()-1);state.org.last=dkey(d);save();render();toast('Отмечено: таблетница заполнена '+fdate(d))}
+  if(a==='memo'){$('memoT').value=state.memo||'';$('dlg4').showModal()}
+  if(a==='edit'&&m)openForm(m);
+  if(a==='take'&&m)take(m,b.dataset.t||null);
+  if(a==='undo')undo(b.dataset.id);
+  if(a==='refill'&&m){
+    refId=m.id;const last=[...m.batches].pop();
+    $('refTitle').textContent='Пополнить: '+m.name;
+    $('refHint').textContent=`Назначено ${fmtN(m.dose)} ${m.du} на приём. Если купили другую дозировку — укажите её, расчёт подстроится.`;
+    $('rStrL').textContent=`Дозировка одной штуки, ${m.du}`;
+    $('rStr').value=last?last.str:m.dose;$('rUnit').value=last?last.unit:'таб.';$('rAmt').value=last?.unit==='таб.'||!last?30:1;
+    $('dlg2').showModal();$('rAmt').select();
+  }
+  if(a==='copy'){
+    const txt='Купить в аптеке:\n'+state.meds.filter(needOrder).map(m=>`— ${m.name} ${fmtN(m.dose)} ${m.du}`).join('\n');
+    try{await navigator.clipboard.writeText(txt);toast('Список скопирован')}catch(err){toast('Не получилось скопировать')}
+  }
+  if(a==='presetNo'&&preset){state.presetV=preset.v;save();render()}
+  if(a==='preset'&&preset){
+    if(state.meds.length&&b.dataset.sure!=='1'){b.dataset.sure='1';b.textContent='Точно заменить?';return}
+    const words=t=>String(t).toLowerCase().replace(/ё/g,'е').match(/[а-яa-z]{5,}/g)||[];
+    const old=state.meds;
+    state.meds=preset.meds.map(p=>{
+      const keys=[...words(p.name),...(p.alias||[]).flatMap(words)];
+      const prev=old.find(o=>words(o.name).some(w=>keys.includes(w)));
+      const pb=(p.batches||[]).map(x=>({id:uid(),str:+x.str,unit:String(x.unit||'таб.'),count:0}));
+      const batches=prev?.batches?.filter(x=>x.count>0).length?prev.batches:pb;
+      return{id:prev?prev.id:uid(),name:String(p.name||''),dose:+p.dose||1,du:String(p.du||'мг'),prn:!!p.prn,times:Array.isArray(p.times)?p.times.map(String):[],
+        end:p.end||null,note:String(p.note||''),thr:+p.thr||14,batches};
+    });
+    if(preset.memo)state.memo=String(preset.memo);
+    if(preset.dayStart)state.dayStart=String(preset.dayStart);
+    state.presetV=preset.v;
+    save();render();location.hash='stock';toast('Назначение загружено — проверьте, что есть дома');
+  }
+});
+addEventListener('hashchange',render);
+setInterval(()=>{if(!document.hidden)render()},60000);
+
+function migrate(m){
+  m={...m,times:[...(m.times||[])]};
+  if(!Array.isArray(m.batches)){ // старый формат: остаток в штуках
+    m.batches=m.stock>0?[{id:uid(),str:1,unit:m.unit||'шт.',count:m.stock}]:[];
+    m.du=m.unit||'шт.';delete m.stock;delete m.unit;delete m.pack;
+  }else m.batches=m.batches.map(b=>({...b}));
+  m.du=m.du||'мг';m.dose=+m.dose||1;
+  return m;
+}
+function adopt(d){
+  if(!d)return;
+  state={meds:Array.isArray(d.meds)?d.meds.map(migrate):[],log:Array.isArray(d.log)?d.log.map(l=>({...l})):[],memo:typeof d.memo==='string'?d.memo:'',dayStart:typeof d.dayStart==='string'?d.dayStart:'05:00',presetV:d.presetV||null,org:d.org&&typeof d.org==='object'?{...d.org}:{on:true,wd:5,days:7,last:null},updatedAt:+d.updatedAt||0};
+}
+function useLocal(msg){
+  local=true;try{adopt(JSON.parse(localStorage.getItem(LS)||'null'))}catch(e){}
+  if(BR)msg='';
+  bridgeOn=true;status(sync?'':msg);render();
+  // Отметки из уведомлений (очередь приложения) проводим только после первой
+  // синхронизации, иначе свежие изменения с другого устройства затрутся.
+  const ready=()=>{if(BR)BR.postMessage(JSON.stringify({type:'ready'}))};
+  if(sync)pull().finally(ready);else ready();
+  if(!BR&&'serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('sw.js').catch(()=>{});
+}
+
+/* ---- связь с Android-приложением «Лекарства»: вне приложения (в Claude, в браузере) не действует ---- */
+const BR=window.MedBridge;let bridgeOn=false,brLast='';
+const txt=h=>{const d=document.createElement('div');d.innerHTML=h;return d.textContent};
+function bridgePost(){ // сводка для системных напоминаний
+  if(!BR||!bridgeOn)return;
+  try{
+    const today=dkey(lnow()),slots={};
+    for(const m of state.meds)if(!m.prn&&!finished(m))for(const t of m.times)
+      (slots[t]=slots[t]||[]).push({id:m.id,name:m.name,what:orgOn()?'из таблетницы':txt(planText(m)),note:m.note||'',end:m.end||null});
+    const tk=state.log.filter(l=>l.kind==='take'&&l.slot&&dayDiff(today,l.day)<=1).map(l=>({id:l.medId,slot:l.slot,day:l.day}));
+    const order=[];
+    for(const m of state.meds){
+      if(finished(m))continue;
+      let date=null;
+      if(needOrder(m))date=today;
+      else if(!m.prn){const d=daysLeft(m),c=courseLeft(m);
+        if(d!==null&&!(c!==null&&d>=c)){const x=new Date(today+'T12:00');x.setDate(x.getDate()+d-m.thr);date=dkey(x)}}
+      if(date)order.push({name:m.name,date});
+    }
+    const msg=JSON.stringify({type:'plan',dayStart:state.dayStart||'05:00',today,
+      slots:Object.keys(slots).sort((a,b)=>tkey(a)-tkey(b)).map(t=>({t,items:slots[t]})),taken:tk,order});
+    if(msg!==brLast){brLast=msg;BR.postMessage(msg)}
+  }catch(e){}
+}
+window.__aptApply=q=>{ // отметки «Принял» из уведомлений, пока приложение было закрыто
+  let n=0;
+  for(const a of q||[])for(const m of state.meds){
+    if(m.prn||!m.times.includes(a.slot)||(m.end&&m.end<a.day)||taken(m,a.slot,a.day))continue;
+    take(m,a.slot,{day:a.day,ts:a.ts});n++;
+  }
+  if(n)toast(`Отмечено из уведомлений: ${n}`);
+  if(BR)BR.postMessage(JSON.stringify({type:'applied'}));
+};
+
+render();
+(async()=>{
+  const c=window.claude;
+  if(!c||!c.use){useLocal('Данные сохраняются только в этом браузере.');return}
+  const [d,user]=await Promise.all([c.use('db'),c.use('user')]);
+  db=d;
+  const id=user?await user.id():null;
+  if(!db||!id){useLocal('Облачное сохранение недоступно — данные сохраняются только в этом браузере.');return}
+  ref=db.doc('data/users/'+id+'/aptechka');
+  db.doc('presets/rx').get().then(s=>{const d=s.exists&&s.data();if(d&&Array.isArray(d.meds)&&d.meds.length){preset={v:d.v||1,meds:d.meds,memo:d.memo,dayStart:d.dayStart};render()}}).catch(()=>{});
+  const lt=setTimeout(()=>status('Не удаётся загрузить данные — проверьте соединение.',true),10000);
+  ref.onSnapshot(s=>{
+    if(!s.metadata.fromCache){clearTimeout(lt);status('')}
+    if(dirty||writing)return;
+    if(s.exists)adopt(s.data());
+    render();
+  },()=>{clearTimeout(lt);status('Синхронизация прервалась. Перезагрузите страницу позже.',true)});
+})();
+}
+</script>
+</body>
+</html>
