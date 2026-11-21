@@ -672,7 +672,7 @@ function useLocal(msg){
 }
 
 /* ---- связь с Android-приложением «Лекарства»: вне приложения (в Claude, в браузере) не действует ---- */
-const BR=window.MedBridge;let bridgeOn=false,brLast='';
+const BR=window.MedBridge;let bridgeOn=false,brLast='',brSync='';
 const txt=h=>{const d=document.createElement('div');d.innerHTML=h;return d.textContent};
 function bridgePost(){ // сводка для системных напоминаний
   if(!BR||!bridgeOn)return;
@@ -690,9 +690,12 @@ function bridgePost(){ // сводка для системных напомин�
         if(d!==null&&!(c!==null&&d>=c)){const x=new Date(today+'T12:00');x.setDate(x.getDate()+d-m.thr);date=dkey(x)}}
       if(date)order.push({name:m.name,date});
     }
-    const msg=JSON.stringify({type:'plan',dayStart:state.dayStart||'05:00',today,
+    const msg=JSON.stringify({type:'plan',dayStart:state.dayStart||'05:00',today,updatedAt:state.updatedAt||0,
       slots:Object.keys(slots).sort((a,b)=>tkey(a)-tkey(b)).map(t=>({t,items:slots[t]})),taken:tk,order});
     if(msg!==brLast){brLast=msg;BR.postMessage(msg)}
+    // настройки синхронизации — для ежедневной фоновой проверки GitHub
+    const sm=JSON.stringify({type:'sync',repo:sync?sync.repo:null,token:sync?sync.token:null});
+    if(sm!==brSync){brSync=sm;BR.postMessage(sm)}
   }catch(e){}
 }
 window.__aptApply=q=>{ // отметки «Принял» из уведомлений, пока приложение было закрыто
