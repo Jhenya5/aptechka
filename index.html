@@ -459,7 +459,9 @@ function render(){
   for(const m of act)if(!m.prn)for(const t of m.times)slots.push({m,t});
   slots.sort((a,b)=>tkey(a.t)-tkey(b.t)||a.m.name.localeCompare(b.m.name,'ru'));
   const doneN=slots.filter(s=>taken(s.m,s.t,today)).length;
-  $('sum').innerHTML=meds.length?`Сегодня принято <b>${doneN} из ${slots.length}</b>${low.length?` · пора заказать: <b>${low.length}</b>`:''}`:'Добавьте первое лекарство, чтобы начать';
+  // дата логического дня: после полуночи и до начала нового дня — ещё вчерашняя
+  const ld=lnow(),wd=ld.toLocaleDateString('ru-RU',{weekday:'long'}),dayLbl=wd.charAt(0).toUpperCase()+wd.slice(1)+', '+fdate(ld);
+  $('sum').innerHTML=meds.length?`<b>${dayLbl}</b> · принято <b>${doneN} из ${slots.length}</b>${low.length?` · пора заказать: <b>${low.length}</b>`:''}`:'Добавьте первое лекарство, чтобы начать';
   const showP=preset&&state.presetV!==preset.v;
   $('preset').innerHTML=showP?`<div class="banner"><p>${meds.length?'Есть обновлённое назначение':'Есть готовое назначение'} — ${preset.meds.length} ${plural(preset.meds.length,['препарат','препарата','препаратов'])}${preset.dayStart?', время под ваш режим':''}.${meds.length?' Заменить им текущий список? Запасы, которые вы уже ввели, перенесутся к тем же лекарствам.':' Останется указать, что есть дома.'}</p><div class="row" style="margin:0"><button class="ghost" data-a="presetNo">Не нужно</button><button class="pri" data-a="preset">${meds.length?'Заменить список':'Загрузить назначение'}</button></div></div>`:'';
   const el=$('view');
