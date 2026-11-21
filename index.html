@@ -230,6 +230,7 @@ function save(){
   if(local){saveLocal();if(sync){syncDirty=true;clearTimeout(syncTimer);syncTimer=setTimeout(push,1500)}return}
   if(!ref)return;
   dirty=true;clearTimeout(timer);timer=setTimeout(flush,400);
+  if(sync&&mcpMode()){syncDirty=true;clearTimeout(syncTimer);syncTimer=setTimeout(push,1500)}
 }
 async function flush(){
   if(writing||!dirty)return;
@@ -249,6 +250,42 @@ const ghH=()=>({Authorization:'Bearer '+sync.token,Accept:'application/vnd.githu
 const b64e=t=>{const b=new TextEncoder().encode(t);let r='';for(let i=0;i<b.length;i+=0x8000)r+=String.fromCharCode.apply(null,b.subarray(i,i+0x8000));return btoa(r)};
 const b64d=t=>new TextDecoder().decode(Uint8Array.from(atob(t.replace(/\s/g,'')),c=>c.charCodeAt(0)));
 const ghErr=c=>c===401?'ключ недействителен или истёк':c===403?'у ключа нет прав на запись (Contents: Read and write)':c===404?'репозиторий не найден или ключ не даёт к нему доступа':'ошибка GitHub '+c;
+/* ---- транспорт к GitHub: напрямую ключом (сайт, APK) или через коннектор GitHub MCP (версия в Claude) ---- */
+const MCP_SERVER='GitHub MCP';let mcp=null;
+const mcpMode=()=>!!mcp&&!local;
+const repoParts=()=>{const[owner,repo]=sync.repo.split('/');return{owner,repo}};
+const mcpErr=e=>{const c=e&&e.code;return c==='server_not_connected'?'коннектор GitHub MCP не подключён (claude.ai → Настройки → Коннекторы)':
+  c==='needs_reauth'?'войдите заново в коннектор GitHub MCP в настройках claude.ai':
+  c==='not_in_manifest'||c==='approval_required'?'доступ к GitHub для этой страницы не разрешён':(e&&e.message)||'ошибка коннектора'};
+async function ghRead(path){ // → {status:200, sha, text} | {status:404}
+  if(mcpMode()){
+    try{
+      const r=await mcp.callTool(MCP_SERVER,'get_file_contents',{...repoParts(),path},{cache:false});
+      const bl=r.content||[],res=bl.find(b=>b.type==='resource'),t=bl.find(b=>b.type==='text');
+      const text=res&&res.resource&&res.resource.text,m=/SHA:\s*([0-9a-f]{40})/i.exec((t&&t.text)||'');
+      return typeof text==='string'?{status:200,sha:m?m[1]:null,text}:{status:404};
+    }catch(e){if(e&&e.code==='tool_error'&&/404|not found/i.test(e.message||''))return{status:404};throw new Error(mcpErr(e))}
+  }
+  const r=await fetch(`https://api.github.com/repos/${sync.repo}/contents/${path}`,{headers:ghH(),cache:'no-store'});
+  if(r.status===404)return{status:404};
+  if(!r.ok)throw new Error(ghErr(r.status));
+  const j=await r.json();return{status:200,sha:j.sha,text:b64d(j.content||'')};
+}
+async function ghWrite(path,text,sha){ // → {ok:true, sha} | {conflict:true, msg}
+  const message='Аптечка: '+new Date().toISOString();
+  if(mcpMode()){
+    try{await mcp.callTool(MCP_SERVER,'create_or_update_file',{...repoParts(),path,branch:'main',message,content:text,...(sha?{sha}:{})},{cache:false})}
+    catch(e){if(e&&e.code==='tool_error')return{conflict:true,msg:e.message};throw new Error(mcpErr(e))}
+    const g=await ghRead(path);return{ok:true,sha:g.sha}; // новый sha узнаём чтением
+  }
+  const r=await fetch(`https://api.github.com/repos/${sync.repo}/contents/${path}`,{method:'PUT',headers:{...ghH(),'Content-Type':'application/json'},
+    body:JSON.stringify({message,content:b64e(text),...(sha?{sha}:{})})});
+  if(r.status===409||r.status===422)return{conflict:true};
+  if(!r.ok)throw new Error(ghErr(r.status));
+  return{ok:true,sha:(await r.json()).content.sha};
+}
+/* сохранить локальную копию: localStorage (сайт, APK) или хранилище Claude */
+function persist(){if(local)saveLocal();else if(ref){dirty=true;clearTimeout(timer);timer=setTimeout(flush,400)}}
 /* строка синхронизации под заголовком: время последней удачной синхронизации и кнопка */
 const SA='aptechka-synced-at';let lastSync=0,syncing=false;try{lastSync=+localStorage.getItem(SA)||0}catch(e){}
 function setSync(err,t){
@@ -258,8 +295,9 @@ function setSync(err,t){
 const whenTxt=ms=>{const d=new Date(ms),k=dkey(d);return(k===dkey(new Date())?'сегодня':k===dkey(new Date(Date.now()-864e5))?'вчера':fdate(d))+' в '+hm(d)};
 function syncBar(){
   const el=$('syncBar');if(!el)return;
-  if(!local){el.hidden=true;return}
+  if(!local&&!ref){el.hidden=true;return}
   el.hidden=false;
+  if(!sync&&!local){el.innerHTML='<span>Синхронизация с телефоном и сайтом: подключите коннектор «GitHub MCP» в настройках claude.ai</span>';return}
   if(!sync){el.innerHTML='<span>Синхронизация не настроена — данные только на этом устройстве</span><button class="ghost" data-a="syncCfg">Настроить синхронизацию</button>';return}
   const err=syncSt.err&&!syncing;
   const t=syncing?'Синхронизирую…':err?esc(syncSt.t):syncSt.t?esc(syncSt.t):lastSync?'Синхронизировано: '+whenTxt(lastSync):'Ещё не синхронизировалось';
@@ -310,8 +348,9 @@ if(window.__APT_TEST)window.__aptTest={merge3};
 
 /* база — данные на момент последней успешной синхронизации этого устройства */
 const BK='aptechka-base';
-const getBase=()=>{try{return JSON.parse(localStorage.getItem(BK)||'null')}catch(e){return null}};
-const setBase=d=>{try{localStorage.setItem(BK,JSON.stringify(d))}catch(e){}};
+let baseRef=null,baseMem=null; // в Claude база хранится отдельным документом хранилища
+const getBase=()=>{if(baseRef)return jcp(baseMem);try{return JSON.parse(localStorage.getItem(BK)||'null')}catch(e){return null}};
+const setBase=d=>{if(baseRef){baseMem=jcp(d);baseRef.set({json:JSON.stringify(d)}).catch(()=>{});return}try{localStorage.setItem(BK,JSON.stringify(d))}catch(e){}};
 const strip=d=>{const c=jcp(d)||{};delete c.updatedAt;return c};
 const isEmptyData=d=>!(d.meds&&d.meds.length)&&!(d.log&&d.log.length);
 let conflicts=0;
@@ -319,28 +358,27 @@ async function pull(){
   if(!sync||syncBusy||!navigator.onLine)return;
   syncBusy=true;let needPush=false;
   try{
-    const r=await fetch(ghUrl(),{headers:ghH(),cache:'no-store'});
-    if(r.status===404){syncSha=null;needPush=true}
-    else if(!r.ok)throw new Error(ghErr(r.status));
+    const g=await ghRead('data.json');
+    if(g.status===404){syncSha=null;needPush=true}
     else{
-      const j=await r.json();
-      const o=JSON.parse(b64d(j.content||'')),rd=o&&o.data?o.data:o;
+      let o=null;try{o=JSON.parse(g.text)}catch(e){}
+      const rd=o&&o.data?o.data:o;
       if(!rd||!Array.isArray(rd.meds))throw new Error('data.json на GitHub повреждён — ничего не меняю');
-      syncSha=j.sha;
+      syncSha=g.sha;
       const base=getBase(),loc=jcp(state);
       const lCh=!base||!jeq(strip(loc),strip(base)),rCh=!base||!jeq(strip(rd),strip(base));
-      if(!base&&isEmptyData(loc)){adopt(rd);saveLocal();setBase(rd);render()}  // новое устройство
+      if(!base&&isEmptyData(loc)){adopt(rd);persist();setBase(rd);render()}  // новое устройство
       else if(!base&&jeq(strip(loc),strip(rd)))setBase(rd);
       else if(!rCh){if(lCh)needPush=true}                       // изменено только здесь
-      else if(!lCh){adopt(rd);saveLocal();setBase(rd);render()}  // изменено только на сервере
+      else if(!lCh){adopt(rd);persist();setBase(rd);render()}  // изменено только на сервере
       else{ // с обеих сторон: слить; серверная версия теперь учтена — она и становится базой
-        adopt(merge3(base,loc,rd));state.updatedAt=Date.now();saveLocal();setBase(rd);render();needPush=true}
+        adopt(merge3(base,loc,rd));state.updatedAt=Date.now();persist();setBase(rd);render();needPush=true}
       setSync(false);
     }
     // назначение врача (rx.json рядом с data.json) — для «Загрузить назначение» и списка в форме
     try{
-      const rr=await fetch(`https://api.github.com/repos/${sync.repo}/contents/rx.json`,{headers:ghH(),cache:'no-store'});
-      if(rr.ok){const p=JSON.parse(b64d((await rr.json()).content||''));
+      const rr=await ghRead('rx.json');
+      if(rr.status===200){const p=JSON.parse(rr.text);
         if(p&&Array.isArray(p.meds)&&p.meds.length){preset={v:p.v||1,meds:p.meds,memo:p.memo,dayStart:p.dayStart};render()}}
     }catch(e){}
   }catch(e){setSync(true,'Синхронизация: '+(e.message||'нет связи'))}
@@ -350,18 +388,15 @@ async function pull(){
 async function push(){
   if(!sync)return;
   if(syncBusy){syncDirty=true;return}
-  syncBusy=true;syncDirty=false;let conflict=false;
+  syncBusy=true;syncDirty=false;let conflict=null;
   const snap=jcp(state);
-  const put=sha=>fetch(ghUrl(),{method:'PUT',headers:{...ghH(),'Content-Type':'application/json'},
-    body:JSON.stringify({message:'Аптечка: '+new Date().toISOString(),content:b64e(JSON.stringify({app:'aptechka',v:1,data:snap})),...(sha?{sha}:{})})});
   try{
-    const r=await put(syncSha);
-    if(r.status===409||r.status===422)conflict=true; // на сервере уже новее — перечитать и слить
-    else if(!r.ok)throw new Error(ghErr(r.status));
-    else{syncSha=(await r.json()).content.sha;setBase(snap);conflicts=0;setSync(false)}
+    const w=await ghWrite('data.json',JSON.stringify({app:'aptechka',v:1,data:snap}),syncSha);
+    if(w.conflict)conflict=w; // на сервере уже новее — перечитать и слить
+    else{syncSha=w.sha;setBase(snap);conflicts=0;setSync(false)}
   }catch(e){syncDirty=true;setSync(true,'Не сохранилось на GitHub: '+(e.message||'нет связи')+'. Повторю позже.')}
   syncBusy=false;
-  if(conflict){if(++conflicts<=3)await pull();else{conflicts=0;syncDirty=true;setSync(true,'Не удалось слить с GitHub, повторю позже.')}}
+  if(conflict){if(++conflicts<=3)await pull();else{conflicts=0;syncDirty=true;setSync(true,'Не удалось записать на GitHub'+(conflict.msg?': '+conflict.msg:'')+'. Повторю позже.')}}
 }
 addEventListener('beforeinstallprompt',e=>{e.preventDefault();installEv=e;render()});
 
@@ -512,9 +547,10 @@ $('syncForm').onsubmit=e=>{
 };
 $('sCancel').onclick=()=>$('dlg6').close();
 $('sOff').onclick=()=>{sync=null;syncSha=null;try{localStorage.removeItem(SK)}catch(err){}$('dlg6').close();render();toast('Синхронизация отключена, данные остались на устройстве')};
-addEventListener('visibilitychange',()=>{if(!document.hidden&&sync&&local)pull()});
-addEventListener('online',()=>{if(sync&&local)pull()});
+addEventListener('visibilitychange',()=>{if(!document.hidden&&sync&&(local||mcpMode()))pull()});
+addEventListener('online',()=>{if(sync&&(local||mcpMode()))pull()});
 setInterval(()=>{if(sync&&local&&!document.hidden)pull()},60000);
+setInterval(()=>{if(sync&&mcpMode()&&!document.hidden)pull()},300000); // через коннектор — реже, раз в 5 мин
 
 let tt;
 function toast(t,u){
@@ -828,12 +864,22 @@ render();
   ref=db.doc('data/users/'+id+'/aptechka');
   db.doc('presets/rx').get().then(s=>{const d=s.exists&&s.data();if(d&&Array.isArray(d.meds)&&d.meds.length){preset={v:d.v||1,meds:d.meds,memo:d.memo,dayStart:d.dayStart};render()}}).catch(()=>{});
   const lt=setTimeout(()=>status('Не удаётся загрузить данные — проверьте соединение.',true),10000);
+  let loaded,firstLoad=new Promise(r=>loaded=r);
   ref.onSnapshot(s=>{
-    if(!s.metadata.fromCache){clearTimeout(lt);status('')}
+    if(!s.metadata.fromCache){clearTimeout(lt);status('');loaded()}
     if(dirty||writing)return;
     if(s.exists)adopt(s.data());
     render();
   },()=>{clearTimeout(lt);status('Синхронизация прервалась. Перезагрузите страницу позже.',true)});
+  // синхронизация с телефоном и сайтом через коннектор GitHub MCP — только после загрузки своих данных
+  const m=await c.use('mcp').catch(()=>null);
+  if(!m){render();return}
+  await firstLoad;
+  baseRef=db.doc('data/users/'+id+'/aptechka-base');
+  try{const bs=await baseRef.get();baseMem=bs.exists&&bs.data().json?JSON.parse(bs.data().json):null}catch(e){baseMem=null}
+  let repo='Jhenya5/aptechka-data';try{repo=JSON.parse(localStorage.getItem(SK)||'null')?.repo||repo}catch(e){}
+  mcp=m;sync={repo,via:'mcp'};render();
+  await pull();
 })();
 }
 </script>
