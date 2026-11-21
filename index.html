@@ -262,6 +262,12 @@ async function pull(){
       }
       setSync(false);
     }
+    // назначение врача (rx.json рядом с data.json) — для «Загрузить назначение» и списка в форме
+    try{
+      const rr=await fetch(`https://api.github.com/repos/${sync.repo}/contents/rx.json`,{headers:ghH(),cache:'no-store'});
+      if(rr.ok){const p=JSON.parse(b64d((await rr.json()).content||''));
+        if(p&&Array.isArray(p.meds)&&p.meds.length){preset={v:p.v||1,meds:p.meds,memo:p.memo,dayStart:p.dayStart};render()}}
+    }catch(e){}
   }catch(e){setSync(true,'Синхронизация: '+(e.message||'нет связи'))}
   syncBusy=false;
   if(syncDirty)push();
@@ -344,9 +350,16 @@ function take(m,slot,at){ // at={day,ts} — отметка задним чис�
     parts:fromOrg?[]:p.parts.map(x=>({bid:x.b.id,n:x.n,str:x.b.str,unit:x.b.unit}))};
   state.log.unshift(e);state.log=state.log.slice(0,500);
   save();render();
-  if(at)return;
+  if(at)return e;
   const d=daysLeft(m);
   toast(`${m.name}: отмечено${d!==null?`, запаса на ${dn(d)}`:''}`,()=>undo(e.id));
+}
+/* «Принять всё» — все ещё не отмеченные лекарства этого времени одной кнопкой */
+function takeAll(t){
+  const day=dkey(lnow()),ts=Date.now(),ids=[];
+  for(const m of state.meds)
+    if(!m.prn&&!finished(m)&&m.times.includes(t)&&!taken(m,t,day))ids.push(take(m,t,{day,ts}).id);
+  if(ids.length)toast(`${t}: отмечено ${ids.length} ${plural(ids.length,['лекарство','лекарства','лекарств'])}`,()=>{for(const id of ids)undo(id)});
 }
 function undo(id){
   const i=state.log.findIndex(l=>l.id===id);if(i<0)return;
@@ -454,7 +467,9 @@ function render(){
 
   if(v==='today'){
     const prn=act.filter(m=>m.prn);
-    el.innerHTML=(slots.length?`<ul class="sched">${slots.map(({m,t})=>{
+    const pend=[...new Set(slots.map(s=>s.t))].map(t=>({t,n:slots.filter(s=>s.t===t&&!taken(s.m,t,today)).length})).filter(x=>x.n);
+    el.innerHTML=(pend.length?`<div class="row" style="margin:0 0 12px">${pend.map(x=>`<button class="pri" data-a="takeAll" data-t="${x.t}">Принять всё в ${x.t} · ${x.n}</button>`).join('')}</div>`:'')+
+    (slots.length?`<ul class="sched">${slots.map(({m,t})=>{
       const e=taken(m,t,today),late=!e&&tkey(t)<now;
       const what=e?(e.parts||[]).map(x=>partTxt(x.n,x.str,x.unit,m.du,true)).join(' + ')||'отмечено':orgOn()&&!m.prn?'<span class="pill">из таблетницы</span>':planText(m);
       return `<li class="${e?'done':late?'late':''}"><span class="time">${t}</span>
@@ -521,23 +536,37 @@ function bRow(b){
   $('fBatches').append(r);
 }
 const normName=t=>String(t||'').toLowerCase().replace(/ё/g,'е').replace(/[^a-zа-я0-9]+/g,' ').trim();
+/* препараты из назначения врача (preset), которых ещё нет в списке */
+const rxWords=t=>String(t||'').toLowerCase().replace(/ё/g,'е').match(/[а-яa-z]{5,}/g)||[];
+function rxMissing(){
+  if(!preset)return[];
+  return preset.meds.map((p,i)=>({p,i})).filter(({p})=>{const keys=[...rxWords(p.name),...(p.alias||[]).flatMap(rxWords)];
+    return!state.meds.some(x=>rxWords(x.name).some(w=>keys.includes(w)))});
+}
+function rxMed(p){return{name:String(p.name||''),dose:+p.dose||1,du:String(p.du||'мг'),prn:!!p.prn,times:Array.isArray(p.times)?p.times.map(String):[],
+  end:p.end||null,note:String(p.note||''),thr:p.prn?(+p.thr||5):Math.max(14,+p.thr||0),
+  batches:(p.batches||[]).map(b=>({id:uid(),str:+b.str,unit:String(b.unit||'таб.')}))}}
 function openForm(m){
-  const sorted=[...state.meds].sort((a,b)=>a.name.localeCompare(b.name,'ru'));
-  $('fPick').innerHTML=sorted.map(x=>`<option value="${x.id}">${esc(x.name)} — ${fmtN(x.dose)} ${esc(x.du)}${finished(x)?' (курс окончен)':''}</option>`).join('')+'<option value="__new">+ Новое лекарство (назначил врач)</option>';
-  $('fPick').value=m?m.id:'__new';$('pickL').hidden=!state.meds.length;
+  const sorted=[...state.meds].sort((a,b)=>a.name.localeCompare(b.name,'ru')),rx=rxMissing();
+  $('fPick').innerHTML=sorted.map(x=>`<option value="${x.id}">${esc(x.name)} — ${fmtN(x.dose)} ${esc(x.du)}${finished(x)?' (курс окончен)':''}</option>`).join('')+
+    (rx.length?`<optgroup label="Из назначения врача">${rx.map(({p,i})=>`<option value="rx:${i}">${esc(p.name)} — ${fmtN(+p.dose||1)} ${esc(p.du||'мг')}</option>`).join('')}</optgroup>`:'')+
+    '<option value="__new">+ Новое лекарство (назначил врач)</option>';
+  $('fPick').value=m?m.id:'__new';$('pickL').hidden=!state.meds.length&&!rx.length;
   fillForm(m);$('dlg').showModal();(m?$('fPick'):$('fName')).focus();
 }
-$('fPick').onchange=()=>{const v=$('fPick').value;fillForm(v==='__new'?null:state.meds.find(x=>x.id===v));if(v==='__new')$('fName').focus()};
-function fillForm(m){
-  editId=m?m.id:null;
-  $('dlgTitle').textContent=m?'Изменить: '+m.name:'Новое лекарство';
+$('fPick').onchange=()=>{const v=$('fPick').value;
+  if(v.startsWith('rx:')){const p=preset&&preset.meds[+v.slice(3)];if(p){fillForm(rxMed(p),true);return}}
+  fillForm(v==='__new'?null:state.meds.find(x=>x.id===v));if(v==='__new')$('fName').focus()};
+function fillForm(m,fromRx){ // fromRx — новое лекарство, заполненное из назначения
+  editId=m&&!fromRx?m.id:null;
+  $('dlgTitle').textContent=fromRx?'Из назначения: '+m.name:m?'Изменить: '+m.name:'Новое лекарство';
   $('fName').value=m?m.name:'';$('fDose').value=m?m.dose:'';$('fDU').value=m?m.du:'мг';
   $('fPrn').checked=m?m.prn:false;$('fTimes').value=m?m.times.join(', '):([...new Set(state.meds.flatMap(x=>x.times))].sort((a,b)=>tkey(a)-tkey(b))[0]||'09:00');
   $('fEnd').value=m?.end||'';$('fNote').value=m?.note||'';$('fThr').value=m?m.thr:14;
   $('fBatches').innerHTML='';
   const bs=m?m.batches.filter(b=>b.str>0):[];
   if(bs.length)bs.forEach(bRow);else bRow({str:m?m.dose:'',unit:'таб.'});
-  $('fDel').hidden=!m;syncPrn();
+  $('fDel').hidden=!m||!!fromRx;syncPrn();
 }
 function syncPrn(){const p=$('fPrn').checked;$('timesL').hidden=p;$('thrLbl').textContent=p?'Напомнить заказать, когда останется (приёмов)':'Напомнить заказать, когда останется на (дней)'}
 $('fPrn').onchange=syncPrn;
@@ -612,6 +641,7 @@ document.addEventListener('click',async e=>{
   if(a==='memo'){$('memoT').value=state.memo||'';$('dlg4').showModal()}
   if(a==='edit'&&m)openForm(m);
   if(a==='take'&&m)take(m,b.dataset.t||null);
+  if(a==='takeAll')takeAll(b.dataset.t);
   if(a==='undo')undo(b.dataset.id);
   if(a==='refill'&&m){
     refId=m.id;const last=[...m.batches].pop();
