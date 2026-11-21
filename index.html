@@ -28,6 +28,9 @@ body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 Onest,system-
 header{display:flex;flex-wrap:wrap;align-items:end;justify-content:space-between;gap:12px 24px;margin-bottom:18px}
 h1{font-size:clamp(32px,6vw,44px);line-height:1.05;margin:0;font-weight:700;letter-spacing:-.01em}
 .sum{color:var(--mute);margin:6px 0 0}.sum b{color:var(--ink)}
+.syncbar{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;justify-content:space-between;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:8px 8px 8px 14px;margin-bottom:16px;font-size:14px;color:var(--mute)}
+.syncbar[hidden]{display:none}
+header>div{flex:1 1 240px}header>button{flex:none}
 button{font:inherit;cursor:pointer;border:0;border-radius:10px;min-height:44px;padding:0 16px}
 button:focus-visible,input:focus-visible,a:focus-visible,select:focus-visible{outline:3px solid var(--blue);outline-offset:2px}
 .pri{background:var(--blue);color:var(--panel);font-weight:600}
@@ -125,6 +128,7 @@ summary{font-weight:600}
     <a href="#log" data-v="log">Журнал</a>
   </nav>
   <p class="note" id="status" hidden></p>
+  <div class="syncbar" id="syncBar" hidden></div>
   <div id="preset"></div>
   <main id="view"></main>
 </div>
@@ -245,21 +249,92 @@ const ghH=()=>({Authorization:'Bearer '+sync.token,Accept:'application/vnd.githu
 const b64e=t=>{const b=new TextEncoder().encode(t);let r='';for(let i=0;i<b.length;i+=0x8000)r+=String.fromCharCode.apply(null,b.subarray(i,i+0x8000));return btoa(r)};
 const b64d=t=>new TextDecoder().decode(Uint8Array.from(atob(t.replace(/\s/g,'')),c=>c.charCodeAt(0)));
 const ghErr=c=>c===401?'ключ недействителен или истёк':c===403?'у ключа нет прав на запись (Contents: Read and write)':c===404?'репозиторий не найден или ключ не даёт к нему доступа':'ошибка GitHub '+c;
-function setSync(err,t){syncSt={err,t:t||(err?'ошибка':'синхронизировано в '+hm(new Date()))};const e=$('syncSt');if(e){e.textContent=syncSt.t;e.style.color=err?'var(--coral)':''}}
+/* строка синхронизации под заголовком: время последней удачной синхронизации и кнопка */
+const SA='aptechka-synced-at';let lastSync=0,syncing=false;try{lastSync=+localStorage.getItem(SA)||0}catch(e){}
+function setSync(err,t){
+  if(!err&&!t){lastSync=Date.now();try{localStorage.setItem(SA,String(lastSync))}catch(e){}}
+  syncSt={err,t:t||(err?'ошибка':'')};syncBar();
+}
+const whenTxt=ms=>{const d=new Date(ms),k=dkey(d);return(k===dkey(new Date())?'сегодня':k===dkey(new Date(Date.now()-864e5))?'вчера':fdate(d))+' в '+hm(d)};
+function syncBar(){
+  const el=$('syncBar');if(!el)return;
+  if(!local){el.hidden=true;return}
+  el.hidden=false;
+  if(!sync){el.innerHTML='<span>Синхронизация не настроена — данные только на этом устройстве</span><button class="ghost" data-a="syncCfg">Настроить синхронизацию</button>';return}
+  const err=syncSt.err&&!syncing;
+  const t=syncing?'Синхронизирую…':err?esc(syncSt.t):syncSt.t?esc(syncSt.t):lastSync?'Синхронизировано: '+whenTxt(lastSync):'Ещё не синхронизировалось';
+  el.innerHTML=`<span${err?' style="color:var(--coral)"':''}>${t}</span><button class="pri" data-a="syncNow"${syncing?' disabled':''}>Синхронизировать данные</button>`;
+}
+async function syncNow(){
+  if(!sync||syncing)return;
+  if(!navigator.onLine){setSync(true,'Нет интернета — синхронизирую, когда появится');return}
+  syncing=true;syncBar();
+  try{await pull()}finally{syncing=false;syncBar()}
+}
+/* ---- трёхстороннее слияние: base — последняя синхронизация, l — это устройство, r — сервер ---- */
+const jeq=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
+const jcp=o=>o===undefined?undefined:JSON.parse(JSON.stringify(o));
+const isObj=o=>o!==null&&typeof o==='object'&&!Array.isArray(o);
+const idList=a=>Array.isArray(a)&&a.every(x=>isObj(x)&&typeof x.id==='string');
+function m3(b,l,r,key,prefL){
+  if(jeq(l,r))return jcp(l);
+  if(l===undefined)return jeq(r,b)?undefined:jcp(r);   // удалено здесь: если там не меняли — удалить
+  if(r===undefined)return jeq(l,b)?undefined:jcp(l);
+  if(b!==undefined&&jeq(l,b))return jcp(r);
+  if(b!==undefined&&jeq(r,b))return jcp(l);
+  // изменено с обеих сторон
+  if(key==='updatedAt')return Math.max(+l||0,+r||0);
+  if(typeof l==='number'&&typeof r==='number'&&typeof b==='number')return Math.max(0,num(r+(l-b))); // остатки: обе дельты
+  if(idList(l)&&idList(r)&&(b===undefined||idList(b))){
+    const bm=new Map((b||[]).map(x=>[x.id,x])),lm=new Map(l.map(x=>[x.id,x])),rm=new Map(r.map(x=>[x.id,x])),out=[];
+    for(const id of [...lm.keys(),...[...rm.keys()].filter(k=>!lm.has(k))]){
+      const v=m3(bm.get(id),lm.get(id),rm.get(id),null,prefL);if(v!==undefined)out.push(v);
+    }
+    return out;
+  }
+  if(isObj(l)&&isObj(r)){
+    const o={};
+    for(const k of new Set([...Object.keys(l),...Object.keys(r)])){const v=m3(isObj(b)?b[k]:undefined,l[k],r[k],k,prefL);if(v!==undefined)o[k]=v}
+    return o;
+  }
+  return jcp(prefL?l:r);
+}
+/* слить данные; base=null — первая синхронизация: объединить, спорное — из более нового */
+function merge3(base,local,remote){
+  const prefL=base?true:(+local.updatedAt||0)>=(+remote.updatedAt||0);
+  const m=m3(base||undefined,local,remote,null,prefL);
+  if(Array.isArray(m.log))m.log=m.log.sort((a,b)=>(b.ts||0)-(a.ts||0)).slice(0,500);
+  return m;
+}
+if(window.__APT_TEST)window.__aptTest={merge3};
+
+/* база — данные на момент последней успешной синхронизации этого устройства */
+const BK='aptechka-base';
+const getBase=()=>{try{return JSON.parse(localStorage.getItem(BK)||'null')}catch(e){return null}};
+const setBase=d=>{try{localStorage.setItem(BK,JSON.stringify(d))}catch(e){}};
+const strip=d=>{const c=jcp(d)||{};delete c.updatedAt;return c};
+const isEmptyData=d=>!(d.meds&&d.meds.length)&&!(d.log&&d.log.length);
+let conflicts=0;
 async function pull(){
   if(!sync||syncBusy||!navigator.onLine)return;
-  syncBusy=true;
+  syncBusy=true;let needPush=false;
   try{
     const r=await fetch(ghUrl(),{headers:ghH(),cache:'no-store'});
-    if(r.status===404){syncSha=null;syncDirty=true}
+    if(r.status===404){syncSha=null;needPush=true}
     else if(!r.ok)throw new Error(ghErr(r.status));
     else{
-      const j=await r.json();syncSha=j.sha;
+      const j=await r.json();
       const o=JSON.parse(b64d(j.content||'')),rd=o&&o.data?o.data:o;
-      if(rd&&Array.isArray(rd.meds)){
-        if(!syncDirty&&(rd.updatedAt||0)>(state.updatedAt||0)){adopt(rd);saveLocal();render()}
-        else if((state.updatedAt||0)>(rd.updatedAt||0))syncDirty=true;
-      }
+      if(!rd||!Array.isArray(rd.meds))throw new Error('data.json на GitHub повреждён — ничего не меняю');
+      syncSha=j.sha;
+      const base=getBase(),loc=jcp(state);
+      const lCh=!base||!jeq(strip(loc),strip(base)),rCh=!base||!jeq(strip(rd),strip(base));
+      if(!base&&isEmptyData(loc)){adopt(rd);saveLocal();setBase(rd);render()}  // новое устройство
+      else if(!base&&jeq(strip(loc),strip(rd)))setBase(rd);
+      else if(!rCh){if(lCh)needPush=true}                       // изменено только здесь
+      else if(!lCh){adopt(rd);saveLocal();setBase(rd);render()}  // изменено только на сервере
+      else{ // с обеих сторон: слить; серверная версия теперь учтена — она и становится базой
+        adopt(merge3(base,loc,rd));state.updatedAt=Date.now();saveLocal();setBase(rd);render();needPush=true}
       setSync(false);
     }
     // назначение врача (rx.json рядом с data.json) — для «Загрузить назначение» и списка в форме
@@ -270,21 +345,23 @@ async function pull(){
     }catch(e){}
   }catch(e){setSync(true,'Синхронизация: '+(e.message||'нет связи'))}
   syncBusy=false;
-  if(syncDirty)push();
+  if(needPush||syncDirty)await push();
 }
 async function push(){
   if(!sync)return;
   if(syncBusy){syncDirty=true;return}
-  syncBusy=true;syncDirty=false;
+  syncBusy=true;syncDirty=false;let conflict=false;
+  const snap=jcp(state);
   const put=sha=>fetch(ghUrl(),{method:'PUT',headers:{...ghH(),'Content-Type':'application/json'},
-    body:JSON.stringify({message:'Аптечка: '+new Date().toISOString(),content:b64e(JSON.stringify({app:'aptechka',v:1,data:state})),...(sha?{sha}:{})})});
+    body:JSON.stringify({message:'Аптечка: '+new Date().toISOString(),content:b64e(JSON.stringify({app:'aptechka',v:1,data:snap})),...(sha?{sha}:{})})});
   try{
-    let r=await put(syncSha);
-    if(r.status===409||r.status===422){const g=await fetch(ghUrl(),{headers:ghH(),cache:'no-store'});syncSha=g.ok?(await g.json()).sha:null;r=await put(syncSha)}
-    if(!r.ok)throw new Error(ghErr(r.status));
-    syncSha=(await r.json()).content.sha;setSync(false);
+    const r=await put(syncSha);
+    if(r.status===409||r.status===422)conflict=true; // на сервере уже новее — перечитать и слить
+    else if(!r.ok)throw new Error(ghErr(r.status));
+    else{syncSha=(await r.json()).content.sha;setBase(snap);conflicts=0;setSync(false)}
   }catch(e){syncDirty=true;setSync(true,'Не сохранилось на GitHub: '+(e.message||'нет связи')+'. Повторю позже.')}
   syncBusy=false;
+  if(conflict){if(++conflicts<=3)await pull();else{conflicts=0;syncDirty=true;setSync(true,'Не удалось слить с GitHub, повторю позже.')}}
 }
 addEventListener('beforeinstallprompt',e=>{e.preventDefault();installEv=e;render()});
 
@@ -430,7 +507,7 @@ $('syncForm').onsubmit=e=>{
   if(!tok){toast('Вставьте ключ доступа');return}
   const changed=!sync||sync.repo!==repo;
   sync={repo,token:tok};try{localStorage.setItem(SK,JSON.stringify(sync))}catch(err){}
-  if(changed)syncSha=null;
+  if(changed){syncSha=null;try{localStorage.removeItem(BK)}catch(err){}}
   $('dlg6').close();status('');render();setSync(false,'подключаю…');pull();
 };
 $('sCancel').onclick=()=>$('dlg6').close();
@@ -449,7 +526,7 @@ function viewName(){const h=location.hash.slice(1);return['today','stock','order
 const doseLbl=m=>`${fmtN(m.dose)} ${esc(m.du)}`;
 
 function render(){
-  bridgePost();
+  bridgePost();syncBar();
   const v=viewName(),meds=state.meds,today=dkey(lnow()),now=tkey(hm(new Date()));
   for(const a of document.querySelectorAll('#nav a'))a.toggleAttribute('aria-current',a.dataset.v===v);
   const low=meds.filter(needOrder);
@@ -483,7 +560,7 @@ function render(){
     (state.memo?`<h2>Памятка</h2><div class="memo">${state.memo.split(/\n+/).filter(Boolean).map(x=>`<p>${esc(x)}</p>`).join('')}</div>`:'')+
     `<div class="setrow"><label class="inl">Мой день начинается в <input type="time" id="dayStart" value="${esc(state.dayStart||'05:00')}"></label><button class="ghost" data-a="memo">${state.memo?'Изменить памятку':'Добавить памятку'}</button></div>
     <div class="setrow" style="margin-top:12px"><span class="sub">Перенос на другое устройство или в другую версию</span><div class="row" style="margin:0"><button class="ghost" data-a="exp">Экспорт</button><button class="ghost" data-a="imp">Импорт</button></div></div>
-    ${local?`<div class="setrow" style="margin-top:12px"><span class="sub">Синхронизация: ${sync?`<b>${esc(sync.repo)}</b> · <span id="syncSt">${esc(syncSt.t||'подключена')}</span>`:'выключена — данные только на этом устройстве'}</span><div class="row" style="margin:0">${sync?'<button class="ghost" data-a="syncNow">Обновить</button>':''}<button class="ghost" data-a="syncCfg">${sync?'Настройки':'Настроить'}</button>${installEv?'<button class="pri" data-a="install">Установить приложение</button>':''}</div></div>`:''}
+    ${local?`<div class="setrow" style="margin-top:12px"><span class="sub">Синхронизация: ${sync?`<b>${esc(sync.repo)}</b>`:'выключена — данные только на этом устройстве'}</span><div class="row" style="margin:0"><button class="ghost" data-a="syncCfg">${sync?'Настройки':'Настроить'}</button>${installEv?'<button class="pri" data-a="install">Установить приложение</button>':''}</div></div>`:''}
     <div class="setrow" style="margin-top:12px"><label class="inl"><input type="checkbox" id="orgOn"${orgOn()?' checked':''}> Раскладываю в таблетницу</label>
     ${orgOn()?`<label class="inl">заполняю в <select id="orgWd" style="width:auto">${WDS.map((w,i)=>`<option value="${i}"${+state.org.wd===i?' selected':''}>${WD[i]}</option>`).join('')}</select> на <input type="number" id="orgDays" min="1" max="31" value="${orgDays()}" style="width:4.5em"> дн.</label>`:''}</div>
     <p class="hint">Приёмы после полуночи, но до начала нового дня, считаются вчерашними — удобно, если ложитесь поздно.</p>`;
@@ -621,7 +698,7 @@ document.addEventListener('click',async e=>{
   if(a==='add')openForm(null);
   if(a==='fill')fill();
   if(a==='syncCfg'){$('sRepo').value=sync?.repo||'Jhenya5/aptechka-data';$('sTok').value='';$('sTok').placeholder=sync?'оставьте пустым, чтобы не менять':'';$('sOff').hidden=!sync;$('dlg6').showModal()}
-  if(a==='syncNow'){setSync(false,'проверяю…');pull()}
+  if(a==='syncNow')syncNow();
   if(a==='install'&&installEv){installEv.prompt();installEv.userChoice.finally(()=>{installEv=null;render()})}
   if(a==='exp')openX('exp');
   if(a==='imp')openX('imp');
