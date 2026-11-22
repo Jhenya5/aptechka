@@ -511,10 +511,13 @@ function orgBlock(slots){
   const today=dkey(lnow()),wd=+state.org.wd,isDay=lnow().getDay()===wd;
   const left=orgLeft(),filledToday=state.org.last===today,due=!filledToday&&(isDay||left===0);
   const times=[...new Set(slots.map(s=>s.t))];
-  const list=times.map(t=>`<li><span class="time">${t}</span><div>${slots.filter(s=>s.t===t).map(({m})=>`<div><b>${esc(m.name)}</b> — ${planText(m)}</div>`).join('')}</div></li>`).join('');
+  // сколько штук (таблеток, капсул) положить в ячейку — с половинками
+  const pieces=m=>plan(m).parts.filter(x=>/^(таб|шт|капс|драж)/i.test(x.b.unit||'')).reduce((s,x)=>s+x.n,0);
+  const list=times.map(t=>{const ms=slots.filter(s=>s.t===t).map(s=>s.m),tot=num(ms.reduce((s,m)=>s+pieces(m),0));
+    return `<li><span class="time">${t}</span><div>${ms.map(m=>`<div><b>${esc(m.name)}</b> — ${planText(m)}</div>`).join('')}${tot?`<div class="sub"><b>Итого в ячейку: ${frac(tot)} шт.</b></div>`:''}</div></li>`}).join('');
   const end=new Date(lnow());end.setDate(end.getDate()+left);
   const head=filledToday?`Заполнена сегодня — хватит на ${dn(orgDays())}`:
-    state.org.last?`Заполнена ${fdate(new Date(state.org.last+'T12:00'))}${left?`, в ней ещё на ${dn(left)}`:', уже пустая'}`:'Ещё не отмечали заполнение';
+    state.org.last?`Заполнена ${fdate(new Date(state.org.last+'T12:00'))}${left?`, в ней ещё на ${dn(left)}`:', уже пустая'}`:'Ещё не отмечали заполнение — пока не отметите, запасы в упаковках не уменьшаются';
   return `<h2>Таблетница</h2><div class="banner"${due?' style="background:var(--coral-soft)"':''}><p>${due?`<b>Пора заполнить таблетницу.</b> `:''}${head}. День заполнения — ${WD[wd]}.</p>
   <div class="row" style="margin:0"><button class="${due?'pri':'ghost'}" data-a="fill">Заполнил на ${dn(orgDays())}</button>${due?`<button class="ghost" data-a="fillMark" title="Если запасы в упаковках уже указаны после заполнения">Уже заполнена в ${WDS[wd]}, без списания</button>`:''}</div></div>
   <details${due?' open':''}><summary class="sub" style="cursor:pointer;min-height:44px;display:flex;align-items:center">Что положить в каждую ячейку</summary>
@@ -583,7 +586,10 @@ function render(){
   if(v==='today'){
     const prn=act.filter(m=>m.prn);
     const pend=[...new Set(slots.map(s=>s.t))].map(t=>({t,n:slots.filter(s=>s.t===t&&!taken(s.m,t,today)).length})).filter(x=>x.n);
-    el.innerHTML=(pend.length?`<div class="row" style="margin:0 0 12px">${pend.map(x=>`<button class="pri" data-a="takeAll" data-t="${x.t}">Принять всё в ${x.t} · ${x.n}</button>`).join('')}</div>`:'')+
+    // утренний приём раньше начала дня: отметки до начала дня попали бы во вчера
+    const mins=t=>{const[h,mm]=t.split(':');return(+h)*60+(+mm)},early=[...new Set(slots.map(s=>s.t))].filter(t=>mins(t)>=240&&mins(t)<dayOff());
+    el.innerHTML=(early.length?`<div class="banner" style="background:var(--coral-soft)"><p>Приём в ${early.join(', ')} раньше начала дня (${esc(state.dayStart)}): отметка до ${esc(state.dayStart)} попадёт во вчерашний день.</p><button class="pri" data-a="dayFix">Начинать день в 04:00</button></div>`:'')+
+    (pend.length?`<div class="row" style="margin:0 0 12px">${pend.map(x=>`<button class="pri" data-a="takeAll" data-t="${x.t}">Принять всё в ${x.t} · ${x.n}</button>`).join('')}</div>`:'')+
     (slots.length?`<ul class="sched">${slots.map(({m,t})=>{
       const e=taken(m,t,today),late=!e&&tkey(t)<now;
       const what=e?(e.parts||[]).map(x=>partTxt(x.n,x.str,x.unit,m.du,true)).join(' + ')||'отмечено':orgOn()&&!m.prn?'<span class="pill">из таблетницы</span>':planText(m);
@@ -754,6 +760,7 @@ document.addEventListener('click',async e=>{
   }
   if(a==='fillMark'){const d=lnow();while(d.getDay()!==+state.org.wd)d.setDate(d.getDate()-1);state.org.last=dkey(d);save();render();toast('Отмечено: таблетница заполнена '+fdate(d))}
   if(a==='memo'){$('memoT').value=state.memo||'';$('dlg4').showModal()}
+  if(a==='dayFix'){state.dayStart='04:00';save();render();toast('День теперь начинается в 04:00')}
   if(a==='edit'&&m)openForm(m);
   if(a==='take'&&m)take(m,b.dataset.t||null);
   if(a==='takeAll')takeAll(b.dataset.t);
